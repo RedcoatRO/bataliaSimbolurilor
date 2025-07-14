@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getAiDuelResponse, getPostGameAnalysis, getExplanationForResponse, analyzeChallenge } from '../services/geminiService';
 import type { DuelMessage, DuelSettings, HistoryItem, SystemMessage, ChallengeResult } from '../types';
@@ -248,33 +249,33 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
     const canChallenge = !isLoading && !isGameOver && challengeCount < 3 && playerScore >= currentChallengeCost;
 
     return (
-        <div className="w-full h-[85vh] max-w-4xl flex flex-col bg-[#1C1C2E] rounded-2xl shadow-2xl shadow-purple-500/10 border border-purple-500/20 p-4 sm:p-6 fade-in">
+        <div className="w-full h-[85vh] max-w-4xl flex flex-col glassmorphism rounded-2xl p-4 sm:p-6 fade-in">
             {/* Header with scores: AI on left, Player on right */}
-            <div className="flex justify-between items-center pb-4 border-b border-gray-700">
+            <div className="flex justify-between items-center pb-4 border-b border-[var(--card-border)]">
                 {/* AI Score (Left) */}
                 <div className="flex items-center gap-3">
-                    <AiIcon className="h-10 w-10 text-purple-300" />
+                    <AiIcon className="h-10 w-10 text-purple-500" />
                     <div>
-                        <div className="font-bold text-lg">AI</div>
-                        <div className="text-xl font-black text-purple-400">{aiScore} puncte</div>
+                        <div className="font-bold text-lg text-[var(--text-primary)]">AI</div>
+                        <div className="text-xl font-black text-purple-600">{aiScore} puncte</div>
                     </div>
                 </div>
                 
-                <div className="font-bold text-2xl text-purple-400">VS</div>
+                <div className="font-bold text-2xl text-[var(--text-accent)]">VS</div>
                 
                 {/* Player Score (Right) */}
                 <div className="flex items-center gap-3">
                     <div className="text-right">
-                        <div className="font-bold text-lg">Jucător</div>
-                        <div className="text-xl font-black text-blue-400">{playerScore} puncte</div>
+                        <div className="font-bold text-lg text-[var(--text-primary)]">Jucător</div>
+                        <div className="text-xl font-black text-blue-600">{playerScore} puncte</div>
                     </div>
-                    <PlayerIcon className="h-10 w-10 text-blue-300" />
+                    <PlayerIcon className="h-10 w-10 text-blue-500" />
                 </div>
             </div>
 
             {/* History */}
             <div className="flex-grow my-4 overflow-y-auto pr-2 space-y-6">
-                 {history.length === 0 && !isLoading && <div className="flex justify-center items-center h-full text-gray-500">Începe duelul! Scrie prima ta replică...</div>}
+                 {history.length === 0 && !isLoading && <div className="flex justify-center items-center h-full text-[var(--text-secondary)]">Începe duelul! Scrie prima ta replică...</div>}
                 {history.map((item) => (
                     <MessageCard 
                         key={item.id} 
@@ -286,34 +287,34 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
                     />
                 ))}
                 {isLoading && (history.length === 0 || 'player' in history[history.length - 1]) && (
-                    <div className="flex items-end gap-3 justify-start fade-in"><AiIcon className="h-8 w-8 text-purple-400 p-1.5 bg-gray-700 rounded-full" /><div className="p-4 rounded-2xl bg-gray-700 rounded-bl-none"><div className="flex items-center gap-2 text-gray-400"><div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div><div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse [animation-delay:0.2s]"></div><div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse [animation-delay:0.4s]"></div></div></div></div>
+                    <div className="flex items-end gap-3 justify-start fade-in"><AiIcon className="h-8 w-8 text-[var(--text-accent)] p-1.5 bg-gray-400/20 rounded-full" /><div className="p-4 rounded-2xl bg-gray-400/20 rounded-bl-none"><div className="flex items-center gap-2 text-[var(--text-accent)]"><div className="w-2 h-2 bg-[var(--text-accent)] rounded-full animate-pulse"></div><div className="w-2 h-2 bg-[var(--text-accent)] rounded-full animate-pulse [animation-delay:0.2s]"></div><div className="w-2 h-2 bg-[var(--text-accent)] rounded-full animate-pulse [animation-delay:0.4s]"></div></div></div></div>
                 )}
                 <div ref={historyEndRef} />
             </div>
 
             {/* Input Form */}
-            <div className="pt-4 border-t border-gray-700">
+            <div className="pt-4 border-t border-[var(--card-border)]">
                 <form onSubmit={handleSubmit} className="flex items-center gap-3">
-                    <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder={isLoading ? "AI se gândește..." : "Eu sunt..."} disabled={isLoading || isGameOver} className="flex-grow bg-gray-800 border border-gray-600 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"/>
-                    <button type="submit" disabled={isLoading || isGameOver} title="Trimite răspunsul" className="bg-purple-600 text-white p-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all transform hover:scale-110"><SendIcon className="h-6 w-6" /></button>
+                    <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder={isLoading ? "AI se gândește..." : "Eu sunt..."} disabled={isLoading || isGameOver} className="flex-grow bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg py-3 px-4 text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--input-focus-ring)] transition-all"/>
+                    <button type="submit" disabled={isLoading || isGameOver} title="Trimite răspunsul" className="bg-[var(--button-primary-bg)] text-white p-3 rounded-lg hover:bg-[var(--button-primary-hover-bg)] disabled:bg-gray-400/50 disabled:cursor-not-allowed transition-all transform hover:scale-110"><SendIcon className="h-6 w-6" /></button>
                 </form>
                 <div className="flex justify-between items-center mt-3">
-                    <button onClick={() => setIsChallengeModalOpen(true)} disabled={!canChallenge} title={canChallenge ? `Depune o contestație (Cost: ${currentChallengeCost} puncte)`: `Nu poți depune o contestație (Contestații rămase: ${3 - challengeCount}, Puncte necesare: ${currentChallengeCost})`} className="flex items-center gap-2 text-sm text-yellow-400 hover:text-yellow-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors">
+                    <button onClick={() => setIsChallengeModalOpen(true)} disabled={!canChallenge} title={canChallenge ? `Depune o contestație (Cost: ${currentChallengeCost} puncte)`: `Nu poți depune o contestație (Contestații rămase: ${3 - challengeCount}, Puncte necesare: ${currentChallengeCost})`} className="flex items-center gap-2 text-sm text-[var(--text-accent-yellow)] hover:opacity-80 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors">
                         <GavelIcon className="h-4 w-4" />
                         <span>Depun Contestație! ({3-challengeCount}/3)</span>
                     </button>
-                    <button onClick={() => handleEndDuel('')} disabled={isLoading || isGameOver} title="Încheie duelul și vezi analiza finală" className="text-sm text-gray-400 hover:text-red-400 disabled:opacity-50 transition-colors">Încheie duelul</button>
+                    <button onClick={() => handleEndDuel('')} disabled={isLoading || isGameOver} title="Încheie duelul și vezi analiza finală" className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-accent-red)] disabled:opacity-50 transition-colors">Încheie duelul</button>
                 </div>
             </div>
 
             {/* Game Over Modal */}
             {isGameOver && (
                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-20 fade-in">
-                    <div className="bg-[#1C1C2E] border border-purple-500/50 rounded-2xl p-8 max-w-md text-center shadow-2xl overflow-y-auto max-h-[80vh]">
-                        <h3 className="text-2xl font-bold text-purple-400 mb-4">Duel Încheiat!</h3>
-                        <p className="text-gray-300 mb-6 whitespace-pre-wrap">{gameOverMessage}</p>
+                    <div className="glassmorphism rounded-2xl p-8 max-w-md text-center overflow-y-auto max-h-[80vh]">
+                        <h3 className="text-2xl font-bold text-[var(--text-accent)] mb-4">Duel Încheiat!</h3>
+                        <p className="text-[var(--text-primary)] mb-6 whitespace-pre-wrap">{gameOverMessage}</p>
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <button onClick={onEndDuel} title="Revino la ecranul principal" className="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors">Înapoi la Dashboard</button>
+                            <button onClick={onEndDuel} title="Revino la ecranul principal" className="bg-[var(--button-primary-bg)] text-white font-bold py-2 px-6 rounded-lg hover:bg-[var(--button-primary-hover-bg)] transition-colors">Înapoi la Dashboard</button>
                             <button onClick={handleDownloadReport} disabled={isLoading} title="Salvează o copie a întregului duel" className="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors">
                                 {isLoading ? 'Așteaptă...' : 'Descarcă Raportul'}
                             </button>

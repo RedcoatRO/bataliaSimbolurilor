@@ -60,12 +60,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
 
   return (
     <div className="w-full max-w-2xl text-left fade-in">
-      <div className="bg-[#1C1C2E] p-8 rounded-2xl shadow-2xl shadow-purple-500/10 border border-purple-500/20">
-        <h2 className="text-2xl font-bold mb-6 text-white text-center">Configurează Duelul</h2>
+      <div className="glassmorphism p-8 rounded-2xl">
+        <h2 className="text-2xl font-bold mb-6 text-[var(--text-primary)] text-center">Configurează Duelul</h2>
 
         {/* Difficulty Selector */}
         <div className="mb-8">
-            <label htmlFor="difficulty" className="block text-lg font-semibold mb-3 text-purple-300">Nivel de Dificultate</label>
+            <label htmlFor="difficulty" className="block text-lg font-semibold mb-3 text-[var(--text-accent)]">Nivel de Dificultate</label>
             <input
                 id="difficulty"
                 type="range"
@@ -74,18 +74,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
                 step="1"
                 value={difficulty}
                 onChange={(e) => setDifficulty(parseInt(e.target.value, 10))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-gray-400/30 rounded-lg appearance-none cursor-pointer"
                 title={`Nivel selectat: ${DIFFICULTY_LABELS[difficulty - 1]}`}
             />
-            <div className="flex justify-between text-xs text-gray-400 mt-2 px-1">
+            <div className="flex justify-between text-xs text-[var(--text-secondary)] mt-2 px-1">
                {DIFFICULTY_LABELS.map((label, index) => <span key={index}>|</span>)}
             </div>
-             <p className="text-center font-bold text-white mt-2 text-lg">{DIFFICULTY_LABELS[difficulty - 1]}</p>
+             <p className="text-center font-bold text-[var(--text-primary)] mt-2 text-lg">{DIFFICULTY_LABELS[difficulty - 1]}</p>
         </div>
 
         {/* Excluded Topics Selector */}
         <div className="mb-8">
-            <h3 className="text-lg font-semibold mb-3 text-purple-300">Subiecte de Evitat (max. {exclusionLimit})</h3>
+            <h3 className="text-lg font-semibold mb-3 text-[var(--text-accent)]">Subiecte de Evitat (max. {exclusionLimit})</h3>
             <div className="flex flex-wrap gap-2">
                 {TOPICS.map(topic => {
                     const isSelected = excludedTopics.includes(topic);
@@ -99,7 +99,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
                             className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-all duration-200
                                 ${isSelected 
                                     ? 'bg-red-500 border-red-400 text-white' 
-                                    : 'bg-gray-700/50 border-gray-600 text-gray-300 hover:bg-gray-600/70'
+                                    : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-gray-400/20'
                                 }
                                 ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
                             `}
@@ -114,7 +114,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
         <button
           onClick={handleStartClick}
           title="Pornește un nou duel cu setările alese"
-          className="w-full group bg-purple-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3"
+          className="w-full group bg-[var(--button-primary-bg)] text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-[var(--button-primary-hover-bg)] transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3"
         >
           <AiIcon className="h-6 w-6 transition-transform duration-300 group-hover:rotate-12" />
           <span>Începe Duelul</span>

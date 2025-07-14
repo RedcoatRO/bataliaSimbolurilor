@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { DuelMessage, HistoryItem } from '../types';
 import { PlayerType } from '../types';
@@ -64,16 +65,16 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-30 fade-in" onClick={onClose}>
-            <div className="bg-[#1C1C2E] border border-yellow-500/50 rounded-2xl p-6 sm:p-8 max-w-3xl w-full text-left shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="glassmorphism rounded-2xl p-6 sm:p-8 max-w-3xl w-full text-left max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0">
-                    <h3 className="text-xl sm:text-2xl font-bold text-yellow-400 mb-2">Depune Contestație</h3>
-                    <p className="text-gray-400 mb-4">Selectează exact două mesaje pentru a contesta o repetare a AI-ului sau o "anihilare" neconformă.</p>
+                    <h3 className="text-xl sm:text-2xl font-bold text-[var(--text-accent-yellow)] mb-2">Depune Contestație</h3>
+                    <p className="text-[var(--text-secondary)] mb-4">Selectează exact două mesaje pentru a contesta o repetare a AI-ului sau o "anihilare" neconformă.</p>
                 </div>
                 
                 {/* Messages List */}
-                <div className="flex-grow overflow-y-auto pr-4 my-4 border-y border-gray-700 py-4">
+                <div className="flex-grow overflow-y-auto pr-4 my-4 border-y border-[var(--card-border)] py-4">
                     <div className="space-y-3">
-                        {duelMessages.length === 0 && <p className="text-gray-500 text-center">Nu există mesaje de contestat încă.</p>}
+                        {duelMessages.length === 0 && <p className="text-[var(--text-secondary)] text-center">Nu există mesaje de contestat încă.</p>}
                         {duelMessages.map(msg => {
                             const isSelected = selectedIds.includes(msg.id);
                             const isAI = msg.player === PlayerType.AI;
@@ -84,13 +85,13 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                                     className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all border-2 ${
                                         isSelected 
                                         ? 'bg-yellow-400/20 border-yellow-400' 
-                                        : 'bg-gray-700/50 border-transparent hover:border-yellow-500/50'
+                                        : 'bg-gray-500/10 border-transparent hover:border-yellow-500/50'
                                     }`}
                                 >
-                                   {isAI ? <AiIcon className="h-6 w-6 text-purple-400 flex-shrink-0 mt-1" /> : <PlayerIcon className="h-6 w-6 text-blue-400 flex-shrink-0 mt-1" />}
+                                   {isAI ? <AiIcon className="h-6 w-6 text-purple-500 flex-shrink-0 mt-1" /> : <PlayerIcon className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />}
                                    <div className="flex-grow">
-                                        <p className="text-white">{msg.text}</p>
-                                        <span className="text-xs text-gray-500">{new Date(parseInt(msg.id.split('-')[1])).toLocaleString('ro-RO')}</span>
+                                        <p className="text-[var(--text-primary)]">{msg.text}</p>
+                                        <span className="text-xs text-[var(--text-secondary)]">{new Date(parseInt(msg.id.split('-')[1])).toLocaleString('ro-RO')}</span>
                                    </div>
                                 </div>
                             );
@@ -101,21 +102,21 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                 {/* Argument and Wager Section */}
                 <div className="flex-shrink-0 space-y-4">
                     <div>
-                        <label htmlFor="argument" className="block text-sm font-medium text-gray-300 mb-1">Argument (Opțional)</label>
+                        <label htmlFor="argument" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Argument (Opțional)</label>
                         <textarea
                             id="argument"
                             value={argument}
                             onChange={(e) => setArgument(e.target.value)}
                             placeholder="Ex: Răspunsul AI nu anihilează replica mea conform regulilor de 'Transformare'..."
-                            className="w-full bg-gray-800 border border-gray-600 rounded-lg py-2 px-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all"
+                            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all"
                             rows={2}
                         />
-                         <p className="text-xs text-gray-500 mt-1">Un argument bun crește șansele de succes.</p>
+                         <p className="text-xs text-[var(--text-secondary)] mt-1">Un argument bun crește șansele de succes.</p>
                     </div>
 
                     {isThirdChallenge && (
                         <div>
-                            <label htmlFor="wager" className="block text-sm font-medium text-gray-300 mb-1">Alege miza pentru contestația finală (1-10 puncte)</label>
+                            <label htmlFor="wager" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Alege miza pentru contestația finală (1-10 puncte)</label>
                              <input
                                 id="wager"
                                 type="range"
@@ -124,9 +125,9 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                                 step="1"
                                 value={wager}
                                 onChange={(e) => setWager(parseInt(e.target.value, 10))}
-                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                className="w-full h-2 bg-gray-400/30 rounded-lg appearance-none cursor-pointer"
                             />
-                            <p className="text-center font-bold text-white mt-1">{wager} puncte</p>
+                            <p className="text-center font-bold text-[var(--text-primary)] mt-1">{wager} puncte</p>
                         </div>
                     )}
                 </div>
@@ -134,17 +135,17 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                 {/* Footer and Submit Button */}
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                      <div className="text-sm font-bold">
-                        <span className="text-gray-300">Cost Contestație: </span>
-                        <span className={canAfford ? 'text-yellow-400' : 'text-red-500'}>{cost} puncte</span>
-                        <span className="text-gray-400"> (Puncte deținute: {playerScore})</span>
+                        <span className="text-[var(--text-secondary)]">Cost Contestație: </span>
+                        <span className={canAfford ? 'text-[var(--text-accent-yellow)]' : 'text-[var(--text-accent-red)]'}>{cost} puncte</span>
+                        <span className="text-[var(--text-secondary)]"> (Puncte deținute: {playerScore})</span>
                      </div>
                     <div className="flex gap-4">
-                        <button onClick={onClose} className="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition-colors">Anulează</button>
+                        <button onClick={onClose} className="bg-gray-500/50 text-[var(--text-primary)] font-bold py-2 px-6 rounded-lg hover:bg-gray-500/70 transition-colors">Anulează</button>
                         <button 
                             onClick={handleSubmit} 
                             disabled={isSubmitDisabled}
                             title={isSubmitDisabled ? "Trebuie să selectezi 2 mesaje și să ai suficiente puncte" : "Trimite contestația"}
-                            className="bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-yellow-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                            className="bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-yellow-700 disabled:bg-gray-500/50 disabled:cursor-not-allowed transition-colors"
                         >
                             Contestă ({cost}p)
                         </button>
