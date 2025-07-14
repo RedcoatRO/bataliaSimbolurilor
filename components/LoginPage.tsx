@@ -14,6 +14,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <p className="text-gray-400 mb-8">Autentifică-te pentru a începe duelul creativității.</p>
         <button
           onClick={onLogin}
+          title="Autentificare folosind contul Google"
           className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-gray-200 transition-all duration-300 transform hover:scale-105"
         >
           <GoogleIcon className="h-6 w-6" />

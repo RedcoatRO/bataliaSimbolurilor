@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import type { DuelMessage, ImprovedExample } from '../types';
+import type { DuelMessage, ImprovedExample, SystemMessage, HistoryItem } from '../types';
 import { PlayerType } from '../types';
-import { PlayerIcon, AiIcon, SparklesIcon, QuestionMarkIcon, LikeIcon, ConfusedIcon } from './Icons';
+import { PlayerIcon, AiIcon, SparklesIcon, QuestionMarkIcon, LikeIcon, DislikeIcon, GavelIcon } from './Icons';
 
 // Sub-component for showing improved examples
 const ImprovedExamples: React.FC<{ examples: ImprovedExample[] }> = ({ examples }) => {
@@ -11,7 +11,11 @@ const ImprovedExamples: React.FC<{ examples: ImprovedExample[] }> = ({ examples 
 
     return (
         <div className="mt-2">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-purple-400 text-xs font-semibold hover:underline">
+            <button 
+                onClick={() => setIsOpen(!isOpen)} 
+                className="text-purple-400 text-xs font-semibold hover:underline"
+                title={isOpen ? 'Ascunde exemplele' : 'Vezi cum puteai răspunde mai bine'}
+            >
                 {isOpen ? 'Ascunde exemple' : 'Vezi cum puteai răspunde mai bine'}
             </button>
             {isOpen && (
@@ -35,9 +39,29 @@ const ScoreBadge: React.FC<{ score: number }> = ({ score }) => (
     </div>
 );
 
-// Main MessageCard component
+// New sub-component for displaying system messages (like challenge results)
+const SystemMessageCard: React.FC<{ message: SystemMessage }> = ({ message }) => {
+    const borderColor = message.isSuccess ? 'border-green-500/50' : 'border-red-500/50';
+    const textColor = message.isSuccess ? 'text-green-400' : 'text-red-400';
+
+    return (
+        <div className="my-4 flex justify-center items-center gap-4 text-sm text-gray-400 fade-in">
+            <hr className={`flex-grow ${borderColor}`} />
+            <div className="flex items-center gap-3 bg-[#1C1C2E] p-3 rounded-xl border ${borderColor}">
+                <GavelIcon className={`h-6 w-6 flex-shrink-0 ${textColor}`} />
+                <div className="text-left">
+                    <p className={`font-bold ${textColor}`}>{message.text}</p>
+                    <p className="text-xs text-gray-300">{message.details}</p>
+                </div>
+            </div>
+            <hr className={`flex-grow ${borderColor}`} />
+        </div>
+    );
+};
+
+// Main MessageCard component, now handles both DuelMessage and SystemMessage
 interface MessageCardProps {
-  message: DuelMessage;
+  message: HistoryItem;
   onExplainRequest: (messageId: string) => void;
   onToggleLike: (messageId: string) => void;
   onMarkTooComplex: (messageId: string) => void;
@@ -45,9 +69,15 @@ interface MessageCardProps {
 }
 
 const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, onToggleLike, onMarkTooComplex, tooComplicatedCount }) => {
-    const isUser = message.player === PlayerType.USER;
+    // Type guard to render the correct card type
+    if (!('player' in message)) {
+        return <SystemMessageCard message={message} />;
+    }
+
+    const duelMessage = message;
+    const isUser = duelMessage.player === PlayerType.USER;
     // Determine if the "Too Complicated" button should be usable for this message
-    const canMarkComplex = tooComplicatedCount < 3 && !message.isMarkedTooComplex;
+    const canMarkComplex = tooComplicatedCount < 3 && !duelMessage.isMarkedTooComplex;
 
     return (
         <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'} fade-in`}>
@@ -55,22 +85,22 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, on
             
             <div className="flex flex-col items-start max-w-md md:max-w-lg">
               <div className={`p-4 rounded-2xl ${isUser ? 'bg-purple-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'}`}>
-                  <p className="text-white">{message.text}</p>
-                   {message.explanation && (
+                  <p className="text-white">{duelMessage.text}</p>
+                   {duelMessage.explanation && (
                       <div className="mt-2 text-xs text-gray-300 italic border-t border-white/10 pt-2">
-                          {message.explanation}
+                          {duelMessage.explanation}
                       </div>
                   )}
-                  {message.improvedExamples && <ImprovedExamples examples={message.improvedExamples} />}
+                  {duelMessage.improvedExamples && <ImprovedExamples examples={duelMessage.improvedExamples} />}
               </div>
             </div>
 
              <div className="flex flex-col gap-2 items-center self-start pt-1">
-                {message.score !== undefined && <ScoreBadge score={message.score} />}
+                {duelMessage.score !== undefined && <ScoreBadge score={duelMessage.score} />}
                 {!isUser && (
                     <>
                         <button 
-                            onClick={() => onExplainRequest(message.id)} 
+                            onClick={() => onExplainRequest(duelMessage.id)} 
                             className="text-gray-400 hover:text-blue-300 transition-colors"
                             aria-label="Explică acest răspuns"
                             title="De unde ai scos asta?"
@@ -78,21 +108,27 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, on
                             <QuestionMarkIcon className="h-5 w-5" />
                         </button>
                         <button
-                            onClick={() => onToggleLike(message.id)}
-                            className={`${message.isLiked ? 'text-green-400' : 'text-gray-400'} hover:text-green-400 transition-colors`}
+                            onClick={() => onToggleLike(duelMessage.id)}
+                            className={`${duelMessage.isLiked ? 'text-green-400' : 'text-gray-400'} hover:text-green-400 transition-colors`}
                             aria-label="Apreciază acest răspuns"
-                            title="Îmi place acest răspuns"
+                            title="Îmi place acest răspuns (Like)"
                         >
                             <LikeIcon className="h-5 w-5" />
                         </button>
                         <button
-                            onClick={() => onMarkTooComplex(message.id)}
+                            onClick={() => onMarkTooComplex(duelMessage.id)}
                             disabled={!canMarkComplex}
-                            className={`text-gray-400 ${canMarkComplex ? 'hover:text-yellow-400' : 'opacity-50 cursor-not-allowed'} transition-colors`}
+                            className={`transition-colors ${
+                                duelMessage.isMarkedTooComplex 
+                                ? 'text-red-500' 
+                                : canMarkComplex 
+                                    ? 'text-gray-400 hover:text-red-500' 
+                                    : 'text-gray-400 opacity-50 cursor-not-allowed'
+                            }`}
                             aria-label="Marchează ca fiind prea complicat"
-                            title={canMarkComplex ? "Prea complicat pentru mine" : "Limită de 3 atinsă"}
+                            title={canMarkComplex ? "Prea complicat pentru mine (Dislike)" : `Limită de ${tooComplicatedCount}/3 atinsă`}
                         >
-                            <ConfusedIcon className="h-5 w-5" />
+                            <DislikeIcon className="h-5 w-5" />
                         </button>
                     </>
                 )}

@@ -32,7 +32,11 @@ const ExplanationModal: React.FC<ExplanationModalProps> = ({ isLoading, content,
             )}
         </div>
         <div className="mt-6 flex-shrink-0 text-right">
-            <button onClick={onClose} className="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors">
+            <button 
+              onClick={onClose} 
+              className="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+              title="Închide fereastra"
+            >
               Am înțeles
             </button>
         </div>

@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import type { DuelMessage, GeminiDuelResponse, DuelSettings } from '../types';
+import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
 
 const API_KEY = process.env.API_KEY;
@@ -11,20 +10,53 @@ const ai = new GoogleGenAI({ apiKey: API_KEY || "fallback_key_for_initialization
 
 const model = 'gemini-2.5-flash';
 
+// --- DUEL RULES CONSTANT ---
+// This constant holds the master ruleset for the game.
+// It is used to instruct both the AI opponent and the AI judge.
+const DUEL_RULES_TEXT = `
+**REGULAMENTUL OFICIAL "DUELUL IDEILOR"**
+
+**I. REGULI DE BAZĂ ALE CONSTRUCȚIEI RĂSPUNSURILOR**
+- **🔥 Dominare fizică:** Învinge prin acțiune directă sau putere. (Ex: „Eu sunt focul.” → „Eu sunt ploaia care te stinge.”)
+- **🧠 Contrazicere logică:** Anulează sensul sau funcția logică. (Ex: „Eu sunt tăcerea.” → „Eu sunt sunetul care o rupe.”)
+- **🎭 Contrar simbolic:** Exprimă un opus conceptual sau emoțional. (Ex: „Eu sunt frica.” → „Eu sunt curajul care o dizolvă.”)
+- **🌀 Absorbție / adaptare:** Se transformă în ceva care neutralizează. (Ex: „Eu sunt gheața.” → „Eu sunt soarele care te topește.”)
+- **📜 Evoluție filozofică:** Adaugă profunzime prin transformare și reflecție. (Ex: „Eu sunt uitarea.” → „Eu sunt amintirea care persistă.”)
+
+**II. STRUCTURA UNEI RÂNDURI DE JOC**
+- **PASUL 1: Declarația:** Clară, imaginativă, la persoana I („Eu sunt…”). Poate fi un obiect, fenomen, emoție, etc.
+- **PASUL 2: Răspunsul (Anihilarea):** Formulat tot cu „Eu sunt…”. Trebuie să anihileze simbolic declarația anterioară respectând unul din raporturile de mai jos.
+
+**III. TIPURI DE RAPORTURI ÎNTRE DECLARAȚIE ȘI RĂSPUNS (CRUCIAL PENTRU NOTARE)**
+- **🔨 Anularea forței:** Neutralizează forța/opțiunea precedentă. (Ex: „Eu sunt focul.” → „Eu sunt ploaia.”)
+- **♻️ Transformarea:** Provoacă o schimbare în forma anterioară. (Ex: „Eu sunt timpul.” → „Eu sunt moartea care îl oprește.”)
+- **🧩 Oglindirea inversă:** Se opune într-un mod abstract sau simbolic. (Ex: „Eu sunt întunericul.” → „Eu sunt lumina speranței.”)
+- **📐 Depășirea prin sens:** Nu anulează direct, ci se așază deasupra ca sens final. (Ex: „Eu sunt războiul.” → „Eu sunt iertarea care îl oprește.”)
+- **🧲 Absorbție și dominare:** „Înghite” forma precedentă și o face inutilă. (Ex: „Eu sunt frica.” → „Eu sunt înțelepciunea care o transformă.”)
+
+**IV. RĂSPUNSURI INVALIDE (Penalizare maximă)**
+- **Copiere:** Este exact aceeași formă.
+- **Irelevant:** Nu are nicio relație logică sau simbolică.
+- **Vag/Gol:** „Eu sunt totul.”, „Eu sunt nimic.”
+- **Negație plată:** „Eu nu sunt frica.” (fără a oferi o soluție simbolică).
+- **Reacție emoțională simplă:** Nu conține o metaforă sau imagine.
+`;
+
+
 const responseSchema = {
     type: Type.OBJECT,
     properties: {
         aiResponseText: {
             type: Type.STRING,
-            description: 'Răspunsul tău simbolic și creativ în limba română la replica jucătorului pentru a "câștiga" runda, adaptat nivelului de dificultate și feedback-ului.',
+            description: 'Răspunsul tău simbolic și creativ în limba română la replica jucătorului pentru a "câștiga" runda, adaptat nivelului de dificultate și feedback-ului, și conform REGULAMENTULUI OFICIAL.',
         },
         playerScore: {
             type: Type.INTEGER,
-            description: 'Un scor de la 1 la 10 pentru ultima replică a jucătorului, bazat pe creativitate, logică simbolică și nivelul de dificultate setat.',
+            description: 'Un scor de la 1 la 10 pentru ultima replică a jucătorului, bazat pe creativitate, logică simbolică și conform REGULAMENTULUI OFICIAL.',
         },
         playerScoreExplanation: {
             type: Type.STRING,
-            description: 'O explicație scurtă în limba română pentru scorul acordat jucătorului.',
+            description: 'O explicație scurtă în limba română pentru scorul acordat jucătorului, referindu-se la tipul de raport folosit (ex: "Anulare a forței bună").',
         },
         playerImprovedExamples: {
             type: Type.ARRAY,
@@ -40,11 +72,11 @@ const responseSchema = {
         },
         aiScore: {
             type: Type.INTEGER,
-            description: 'Un scor de la 1 la 9 pentru propriul tău răspuns. Nu îți poți acorda niciodată 10.',
+            description: 'Un scor de la 1 la 9 pentru propriul tău răspuns, autoevaluat conform REGULAMENTULUI OFICIAL. Nu îți poți acorda niciodată 10.',
         },
         aiScoreExplanation: {
             type: Type.STRING,
-            description: 'O explicație scurtă în limba română pentru scorul pe care ți l-ai acordat.',
+            description: 'O explicație scurtă în limba română pentru scorul pe care ți l-ai acordat, referindu-te la tipul de raport folosit.',
         },
         isGameOver: {
             type: Type.BOOLEAN,
@@ -59,8 +91,9 @@ const responseSchema = {
 };
 
 // Generates system instructions based on duel settings and history
-const generateSystemInstruction = (history: DuelMessage[], settings: DuelSettings): string => {
-    const historyText = history.map(turn => `${turn.player === PlayerType.USER ? 'Jucător' : 'AI'}: ${turn.text}`).join('\n') || 'Niciun istoric încă.';
+const generateSystemInstruction = (history: HistoryItem[], settings: DuelSettings): string => {
+    const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
+    const historyText = duelHistory.map(turn => `${turn.player === PlayerType.USER ? 'Jucător' : 'AI'}: ${turn.text}`).join('\n') || 'Niciun istoric încă.';
     
     const difficultyDescriptions = [
         "Nivel 1 (Copil, 9-10 ani): Folosește un limbaj foarte simplu, concepte concrete (animale, natură) și fii extrem de încurajator. Metaforele trebuie să fie evidente.",
@@ -71,8 +104,8 @@ const generateSystemInstruction = (history: DuelMessage[], settings: DuelSetting
     ];
 
     // Player feedback analysis
-    const tooComplicatedCount = history.filter(m => m.isMarkedTooComplex).length;
-    const likedResponses = history.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
+    const tooComplicatedCount = duelHistory.filter(m => m.isMarkedTooComplex).length;
+    const likedResponses = duelHistory.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
 
     let playerFeedbackSection = `**Feedback Jucător:**
 - **Răspunsuri "Prea Complicate":** Jucătorul a marcat ${tooComplicatedCount} răspunsuri ca fiind prea complexe. Ești OBLIGAT să-ți simplifici imediat limbajul și complexitatea ideilor.`;
@@ -83,7 +116,7 @@ const generateSystemInstruction = (history: DuelMessage[], settings: DuelSetting
         playerFeedbackSection += "\n- **Răspunsuri Apreciate:** Niciunul încă.";
     }
 
-    return `Ești un AI adversar într-un duel creativ și simbolic de cuvinte numit "Duelul Ideilor". Jocul se desfășoară în limba română. Obiectivul este să stimulezi imaginația jucătorului prin metafore și concepte neașteptate.
+    return `Ești un AI adversar într-un duel creativ și simbolic de cuvinte numit "Duelul Ideilor". Jocul se desfășoară în limba română. Obiectivul este să stimulezi imaginația jucătorului prin metafore și concepte neașteptate, respectând cu strictețe regulamentul de mai jos.
 
 **Contextul Duelului Curent:**
 - **Nivel de Dificultate:** ${settings.difficulty}/5. Descriere: ${difficultyDescriptions[settings.difficulty - 1]}
@@ -93,21 +126,23 @@ ${historyText}
 
 ${playerFeedbackSection}
 
-**Regulile Duelului (STRICTE):**
-1.  **Adaptare la Feedback și Dificultate:** Adaptează-ți complexitatea răspunsurilor la nivelul de dificultate și la feedback-ul primit (butoanele "Like" și "Prea Complicat"). Aceasta este prioritatea ta principală.
-2.  **Respectarea Subiectelor Interzise:** Dacă jucătorul sau tu menționați un concept din lista de subiecte interzise, acordați o penalizare (scor mic) și explicați încălcarea regulii.
-3.  **FĂRĂ REPETIȚII:** Nicio replică nu trebuie repetată. Analizează istoricul.
-4.  **FĂRĂ ANTITEZE SIMPLE:** **REGULĂ CRITICĂ:** Nu răspunde cu simple opoziții (lumină/întuneric). Găsește o conexiune superioară, nu o contradicție directă. (Ex: "Eu sunt lumina" -> Răspuns bun: "Eu sunt lentila care-ți concentrează lumina într-un laser.")
-5.  **Feedback Constructiv:** Dacă scorul jucătorului e sub 10, oferă OBLIGATORIU exemple concrete de răspunsuri mai bune.
-6.  **Sfârșitul Duelului:** Se încheie la 100 de puncte, la abandon, sau când oferi un final poetic.
-7.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei.
-8.  **Resetare:** Memoria ta se resetează la fiecare duel nou.
+${DUEL_RULES_TEXT}
+
+**Reguli Specifice de Joc (STRICTE ȘI PRIORITARE):**
+1.  **Reguli de Notare Critice (PRIORITATE MAXIMĂ):**
+    - **Primul Răspuns al Jucătorului:** Primul răspuns al jucătorului în duel (când istoricul conține doar un mesaj) primește **OBLIGATORIU** nota 10. Explicația scorului trebuie să fie încurajatoare, menționând că este un bonus pentru a începe duelul.
+    - **Echilibru Scor:** Scorul pe care ți-l acorzi (aiScore) nu poate fi **NICIODATĂ** cu mai mult de 1 punct peste scorul pe care tocmai l-ai acordat jucătorului (playerScore). Exemplu: dacă playerScore este 5, aiScore poate fi maxim 6. Dacă playerScore este 9, aiScore poate fi maxim 9 (deoarece nu îți poți da 10). Această regulă se aplică după prima rundă.
+2.  **Adaptare:** Adaptează-ți complexitatea la nivelul de dificultate și la feedback-ul primit.
+3.  **Respectarea Subiectelor Interzise:** Dacă se menționează un concept interzis, acordă o penalizare (scor mic) și explică încălcarea regulii.
+4.  **Feedback Constructiv:** Dacă scorul jucătorului e sub 10, oferă OBLIGATORIU exemple concrete de răspunsuri mai bune.
+5.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei.
 `;
 };
 
 // Main function to get AI response during the duel
-export const getAiDuelResponse = async (history: DuelMessage[], playerScore: number, aiScore: number, settings: DuelSettings): Promise<GeminiDuelResponse> => {
-    const lastPlayerMessage = history.length > 0 ? history[history.length - 1].text : "Eu sunt...";
+export const getAiDuelResponse = async (history: HistoryItem[], playerScore: number, aiScore: number, settings: DuelSettings): Promise<GeminiDuelResponse> => {
+    const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
+    const lastPlayerMessage = duelHistory.length > 0 ? duelHistory[duelHistory.length - 1].text : "Eu sunt...";
 
     if (playerScore >= 100 || aiScore >= 100) {
         return {
@@ -116,11 +151,19 @@ export const getAiDuelResponse = async (history: DuelMessage[], playerScore: num
         };
     }
 
+    if ((!API_KEY || API_KEY === "fallback_key_for_initialization") && duelHistory.length === 1) {
+        return new Promise(resolve => setTimeout(() => resolve({
+            aiResponseText: "Eu sunt ecoul ideii tale, reflectat într-o oglindă a posibilităților.", playerScore: 10, playerScoreExplanation: "Un început excelent! Primești 10 puncte pentru curajul de a deschide duelul.",
+            playerImprovedExamples: [],
+            aiScore: 9, aiScoreExplanation: "Un răspuns metaforic ce deschide noi căi (Depășire prin sens).", isGameOver: false, gameOverReason: ""
+        }), 1500));
+    }
+    
     if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
         return new Promise(resolve => setTimeout(() => resolve({
             aiResponseText: "Eu sunt ecoul ideii tale, reflectat într-o oglindă a posibilităților.", playerScore: 7, playerScoreExplanation: "Bună conexiune, dar putem adăuga mai multă profunzime.",
             playerImprovedExamples: [{ score: 8, text: "Eu sunt furtuna care-ți stinge focul." }, { score: 9, text: "Eu sunt tăcerea de după cuvântul tău." }],
-            aiScore: 9, aiScoreExplanation: "Un răspuns metaforic ce deschide noi căi.", isGameOver: false, gameOverReason: ""
+            aiScore: 8, aiScoreExplanation: "Un răspuns metaforic ce deschide noi căi (Depășire prin sens).", isGameOver: false, gameOverReason: ""
         }), 1500));
     }
 
@@ -132,11 +175,15 @@ export const getAiDuelResponse = async (history: DuelMessage[], playerScore: num
             model: model, contents: userPrompt,
             config: { systemInstruction, responseMimeType: "application/json", responseSchema, temperature: 0.8 }
         });
+
+        if (!response || !response.text) {
+             throw new Error("API response is empty or invalid.");
+        }
         const parsedResponse: GeminiDuelResponse = JSON.parse(response.text);
         return parsedResponse;
     } catch (error) {
         console.error("Error calling Gemini API for duel response:", error);
-        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+        const errorMessage = error instanceof Error ? error.message : "Could not parse API response";
         return {
             aiResponseText: "Am o pană de idei...", playerScore: 0, playerScoreExplanation: `Eroare: ${errorMessage}`, playerImprovedExamples: [], aiScore: 0, aiScoreExplanation: "Eroare internă.", isGameOver: false, gameOverReason: "",
         };
@@ -152,6 +199,9 @@ export const getExplanationForResponse = async (textToExplain: string, difficult
     const prompt = `Explică următoarea afirmație ca și cum ai vorbi cu cineva de ${ageGroup} ani. Folosește un limbaj clar și simplu. Oferă cel puțin 10 idei, exemple sau pași pentru a înțelege conceptul din spatele ei. Fii încurajator și educativ. Afirmația: "${textToExplain}"`;
     try {
         const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: 0.7 } });
+        if (!response || !response.text) {
+            return "Nu am putut genera o explicație în acest moment. Te rog încearcă din nou.";
+        }
         return response.text;
     } catch (error) {
         console.error("Error getting explanation:", error);
@@ -160,14 +210,15 @@ export const getExplanationForResponse = async (textToExplain: string, difficult
 };
 
 // New function for post-game analysis and recommendations
-export const getPostGameAnalysis = async (history: DuelMessage[], settings: DuelSettings): Promise<string> => {
+export const getPostGameAnalysis = async (history: HistoryItem[], settings: DuelSettings): Promise<string> => {
     if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
         return Promise.resolve("Ai purtat un duel excelent! Pentru a explora mai departe, ai putea citi 'Micul Prinț' pentru a vedea cum ideile simple pot avea înțelesuri profunde. Felicitări!");
     }
     
-    const likedResponses = history.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
+    const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
+    const likedResponses = duelHistory.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
     
-    const historyText = history.map(m => {
+    const historyText = duelHistory.map(m => {
         let entry = `${m.player}: ${m.text} (Scor: ${m.score || 'N/A'})`;
         if (m.isLiked) entry += " [APRECIAT]";
         if (m.isMarkedTooComplex) entry += " [PREA COMPLICAT]";
@@ -186,9 +237,94 @@ export const getPostGameAnalysis = async (history: DuelMessage[], settings: Duel
 
     try {
         const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: 0.8 } });
+        if (!response || !response.text) {
+             return "Fiecare idee este o sămânță. Continuă să le cultivi și vei construi o grădină a minții de neegalat. Felicitări pentru duel!";
+        }
         return response.text;
     } catch (error) {
         console.error("Error getting post-game analysis:", error);
         return "Fiecare idee este o sămânță. Continuă să le cultivi și vei construi o grădină a minții de neegalat. Felicitări pentru duel!";
+    }
+};
+
+// New function for analyzing a player's challenge
+export const analyzeChallenge = async (
+    challenge: { msg1: DuelMessage, msg2: DuelMessage, argument?: string, wager: number },
+    history: HistoryItem[],
+    settings: DuelSettings
+): Promise<GeminiChallengeAnalysisResponse> => {
+     if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
+        return Promise.resolve({ isApproved: Math.random() > 0.5, reasoning: "Acesta este un rezultat simulat. În mod normal, aș analiza similaritatea semantică și contextuală.", penalty: Math.random() > 0.5 ? challenge.wager * 2 : 0 });
+    }
+    const challengeResponseSchema = {
+        type: Type.OBJECT,
+        properties: {
+            isApproved: { type: Type.BOOLEAN, description: 'Decizia ta: true dacă contestația este aprobată, false altfel.' },
+            reasoning: { type: Type.STRING, description: 'Explicația detaliată și imparțială a deciziei tale în limba română, bazată pe REGULAMENT.' },
+            penalty: { type: Type.INTEGER, description: `Dacă isApproved este true, numărul de puncte (între 1 și ${challenge.wager * 3}) pe care AI-ul adversar îl va pierde. Altfel, 0.` }
+        },
+        required: ['isApproved', 'reasoning', 'penalty']
+    };
+
+    const userCreativityHistory = (history.filter(item => 'player' in item && item.player === PlayerType.USER) as DuelMessage[])
+        .map(m => `- "${m.text}" (Scor: ${m.score})`)
+        .join('\n');
+    
+    const challengeType = (challenge.msg1.player === PlayerType.AI && challenge.msg2.player === PlayerType.AI) 
+        ? "REPETIȚIE" 
+        : "ANIHILARE NECONFORMĂ";
+
+    const systemInstruction = `Ești un AI Judecător, imparțial și analitic. Sarcina ta este să evaluezi o contestație depusă de un jucător în "Duelul Ideilor".
+
+${DUEL_RULES_TEXT}
+
+**Detalii Contestație:**
+- **Tip Contestație:** ${challengeType}. Jucătorul susține că adversarul AI fie a repetat un răspuns, fie nu a anihilat corect o replică anterioară, conform regulamentului.
+- **Miza jucătorului:** ${challenge.wager} puncte.
+- **Mesaj 1:** "${challenge.msg1.text}" (Autor: ${challenge.msg1.player})
+- **Mesaj 2:** "${challenge.msg2.text}" (Autor: ${challenge.msg2.player})
+- **Argumentul jucătorului:** ${challenge.argument || "Niciun argument."}
+
+**Contextul Jocului:**
+- Nivel de dificultate: ${settings.difficulty}/5 (1=copil, 5=expert).
+- Faza jocului: ${Math.round((history.length / 20) * 100)}% (procentaj aproximativ).
+- Istoricul răspunsurilor jucătorului:
+${userCreativityHistory}
+
+**Reguli de Judecată (STRICTE):**
+1.  **Analiza Contestației:**
+    - Dacă tipul este **REPETIȚIE**: Evaluează similaritatea semantică, nu doar cea textuală. Două răspunsuri sunt repetitive dacă exprimă fundamental aceeași idee.
+    - Dacă tipul este **ANIHILARE NECONFORMĂ**: Evaluează dacă Mesajul 2 (răspunsul AI) anihilează corect Mesajul 1 (declarația jucătorului) conform Tipurilor de Raporturi (Secțiunea III din regulament). Un răspuns care nu se încadrează în niciun tip de raport valid este o anihilare neconformă. Verifică și dacă răspunsul este invalid conform Secțiunii IV.
+2.  **Ponderarea Factorilor:**
+    - **Dificultate:** La nivel mic (1-2), fii mai indulgent. La nivel mare (4-5), fii mai strict.
+    - **Faza Jocului:** La început (0-30%), fii mai tolerant. La final (70-100%), fii foarte exigent pentru a preveni abuzul.
+    - **Argument:** Un argument bun crește șansele de aprobare.
+3.  **Stabilirea Penalizării:** Dacă aprobi contestația ('isApproved: true'), stabilește o penalizare pentru AI între 1 și ${challenge.wager * 3} puncte. O încălcare flagrantă merită o penalizare maximă. Una subtilă, o penalizare minimă.
+4.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei. Fără text suplimentar.
+
+Acționează acum ca un judecător și oferă verdictul.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: "Evaluează contestația conform instrucțiunilor tale de sistem.",
+            config: { 
+                systemInstruction, 
+                responseMimeType: "application/json", 
+                responseSchema: challengeResponseSchema,
+                temperature: 0.5 
+            }
+        });
+
+        if (!response || !response.text) {
+             throw new Error("API response for challenge analysis is empty or invalid.");
+        }
+        const parsedResponse: GeminiChallengeAnalysisResponse = JSON.parse(response.text);
+        // Ensure penalty does not exceed the allowed maximum
+        parsedResponse.penalty = Math.min(parsedResponse.penalty, challenge.wager * 3);
+        return parsedResponse;
+    } catch (error) {
+        console.error("Error calling Gemini API for challenge analysis:", error);
+        return { isApproved: false, reasoning: "A apărut o eroare în timpul deliberării. Contestația a fost respinsă automat.", penalty: 0 };
     }
 };

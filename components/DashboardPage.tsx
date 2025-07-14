@@ -50,6 +50,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
   const handleStartClick = () => {
       onStartDuel({ difficulty, excludedTopics });
   };
+  
+  // Helper function to get tooltip text for a topic button
+  const getTopicTooltip = (topic: string, isSelected: boolean, isDisabled: boolean) => {
+      if (isDisabled) return 'Limită de subiecte atinsă pentru acest nivel';
+      if (isSelected) return `Apasă pentru a elimina "${topic}" de la excepții`;
+      return `Apasă pentru a adăuga "${topic}" la excepții`;
+  };
 
   return (
     <div className="w-full max-w-2xl text-left fade-in">
@@ -68,6 +75,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
                 value={difficulty}
                 onChange={(e) => setDifficulty(parseInt(e.target.value, 10))}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                title={`Nivel selectat: ${DIFFICULTY_LABELS[difficulty - 1]}`}
             />
             <div className="flex justify-between text-xs text-gray-400 mt-2 px-1">
                {DIFFICULTY_LABELS.map((label, index) => <span key={index}>|</span>)}
@@ -87,6 +95,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
                             key={topic}
                             onClick={() => handleTopicToggle(topic)}
                             disabled={isDisabled}
+                            title={getTopicTooltip(topic, isSelected, isDisabled)}
                             className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-all duration-200
                                 ${isSelected 
                                     ? 'bg-red-500 border-red-400 text-white' 
@@ -104,6 +113,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onStartDuel }) => {
 
         <button
           onClick={handleStartClick}
+          title="Pornește un nou duel cu setările alese"
           className="w-full group bg-purple-600 text-white font-bold py-4 px-6 rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3"
         >
           <AiIcon className="h-6 w-6 transition-transform duration-300 group-hover:rotate-12" />

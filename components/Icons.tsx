@@ -46,9 +46,14 @@ export const LikeIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
-export const ConfusedIcon: React.FC<{className?: string}> = ({ className }) => (
-     <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z" opacity="0.6"/>
-        <path d="M11 7h2v6h-2zm0 8h2v2h-2z"/>
+export const DislikeIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v1.91l.01.01L1 14c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/>
+    </svg>
+);
+
+export const GavelIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1 21h12v-2H1v2zM5.24 8.07l2.83-2.83-1.41-1.41-2.83 2.83 1.41 1.41zM12.36 1.36L15.19 4.2 3.88 15.5l-2.83-2.83L12.36 1.36zM19.78 8.48l-4.24-4.24 1.41-1.41 4.24 4.24-1.41 1.41zM18.36 9.9l-4.24-4.24 1.41-1.41 4.24 4.24-1.41 1.41zM20.19 15.5l-2.83-2.83 1.41-1.41 2.83 2.83-1.41 1.41z"/>
     </svg>
 );
