@@ -7,7 +7,8 @@ import { PlayerIcon, AiIcon, SendIcon, GavelIcon } from './Icons';
 import MessageCard from './MessageCard';
 import ExplanationModal from './ExplanationModal';
 import ChallengeModal from './ChallengeModal';
-import ImageModal from './ImageModal'; // Import the new ImageModal component
+import ImageModal from './ImageModal';
+import Toast from './Toast'; // Import the new Toast component
 
 interface DuelPageProps {
   settings: DuelSettings;
@@ -35,11 +36,10 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
     const [gameOverMessage, setGameOverMessage] = useState('');
     const [explanationModal, setExplanationModal] = useState<{ content: string, isLoading: boolean }>({ content: '', isLoading: false });
     const [tooComplicatedCount, setTooComplicatedCount] = useState(0);
-    // Stare pentru a gestiona nivelul metaforic curent, care poate fi modificat în timpul jocului.
     const [currentMetaphoricalLevel, setCurrentMetaphoricalLevel] = useState(settings.metaphoricalLevel);
-    // State for the new Image Visualization Modal
     const [imageModal, setImageModal] = useState<{ imageUrl: string, prompt: string, isLoading: boolean }>({ imageUrl: '', prompt: '', isLoading: false });
-
+    // State for the new error toast notification
+    const [toastError, setToastError] = useState<string | null>(null);
 
     // --- Challenge System State ---
     const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -52,37 +52,27 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         historyEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [history, isLoading]);
 
-    // Acest efect gestionează ajustarea dinamică a nivelului metaforic al AI-ului
-    // pe baza feedback-ului utilizatorului (marchează răspunsurile ca "Prea Complicate").
-    // Se declanșează la a 2-a și a 3-a oară când utilizatorul oferă acest feedback.
     useEffect(() => {
-        // Definește nivelul minim posibil pentru dificultatea curentă
-        // pentru a preveni reducerea excesivă a acestuia.
         const minLevelForDifficulty = METAPHOR_RANGES[settings.difficulty].min;
 
-        // Verifică dacă este al 2-lea sau al 3-lea "dislike"
         if (tooComplicatedCount === 2 || tooComplicatedCount === 3) {
-            // Calculează noul nivel, asigurându-se că nu coboară sub minimul dificultății.
             const newLevel = Math.max(minLevelForDifficulty, currentMetaphoricalLevel - 1);
             
-            // Actualizează starea și notifică utilizatorul doar dacă a avut loc o schimbare.
             if (newLevel < currentMetaphoricalLevel) {
                 setCurrentMetaphoricalLevel(newLevel);
                 
-                // Creează un mesaj de sistem pentru a informa utilizatorul despre schimbare.
                 const systemMessage: SystemMessage = {
                     id: `sys-metaphor-${Date.now()}`,
                     type: 'SYSTEM',
                     text: 'Nivel Metaforic Ajustat Automat!',
                     details: `Datorită feedback-ului tău, complexitatea metaforică a AI-ului a fost redusă la nivelul ${newLevel}.`,
-                    isSuccess: true, // Folosește stilul de succes pentru acțiuni pozitive de feedback
+                    isSuccess: true,
                 };
                 setHistory(prev => [...prev, systemMessage]);
             }
         }
     }, [tooComplicatedCount, settings.difficulty, currentMetaphoricalLevel]);
 
-    // Handles the request for a detailed explanation of an AI message
     const handleExplainRequest = useCallback(async (messageId: string) => {
         const messageToExplain = history.find(m => m.id === messageId && 'player' in m) as DuelMessage | undefined;
         if (!messageToExplain) return;
@@ -93,9 +83,9 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
     }, [history, settings.difficulty]);
 
     /**
-     * Handles the request to visualize a message as an image.
-     * This function now creates a contextual prompt by combining the selected message
-     * with the message that came immediately before it in the duel, illustrating the conflict.
+     * Handles the request to visualize a message.
+     * It builds a contextual prompt, calls the image generation service,
+     * and now includes robust error handling that triggers a toast notification on failure.
      */
     const handleVisualizeRequest = useCallback(async (messageId: string) => {
         const messageIndex = history.findIndex(m => m.id === messageId);
@@ -103,15 +93,13 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
 
         const messageToVisualize = history[messageIndex] as DuelMessage;
 
-        // Build the contextual prompt by finding the previous duel message.
         let finalPrompt: string;
         let previousMessage: DuelMessage | null = null;
         
-        // Search backwards from the current message's index to find the last valid DuelMessage.
         if (messageIndex > 0) {
             for (let i = messageIndex - 1; i >= 0; i--) {
                 const item = history[i];
-                if ('player' in item) { // Ensure it's a DuelMessage, not a SystemMessage
+                if ('player' in item) {
                     previousMessage = item as DuelMessage;
                     break;
                 }
@@ -119,61 +107,51 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         }
 
         if (previousMessage) {
-            // Create a prompt that describes the conflict or interaction between the two ideas.
             finalPrompt = `O luptă conceptuală între "${previousMessage.text}" și "${messageToVisualize.text}"`;
         } else {
-            // If it's the very first message in the duel, visualize it directly.
             finalPrompt = messageToVisualize.text;
         }
 
-        // If an image has already been generated, just show it in the modal.
         if (messageToVisualize.generatedImage) {
             setImageModal({ imageUrl: messageToVisualize.generatedImage, prompt: finalPrompt, isLoading: false });
             return;
         }
 
-        // Set loading state and show the modal with the contextual prompt.
         setImageModal({ imageUrl: '', prompt: finalPrompt, isLoading: true });
 
         try {
             const base64Image = await generateImageForPrompt(finalPrompt);
-            
-            // Create the full data URI for the image to be used in `src` attributes.
             const imageUrl = `data:image/jpeg;base64,${base64Image}`;
             
-            // Update history to store the full data URI with the correct message.
             setHistory(prevHistory => prevHistory.map(item =>
                 item.id === messageId ? { ...item, generatedImage: imageUrl } : item
             ));
             
-            // Update the modal to show the newly generated image.
             setImageModal({ imageUrl, prompt: finalPrompt, isLoading: false });
 
         } catch (error) {
             console.error("Failed to visualize metaphor:", error);
-            // Close the modal on error. Could also be modified to show an error message.
+            // Set a user-friendly error message for the toast notification
+            const errorMessage = error instanceof Error ? error.message : "Eroare necunoscută.";
+            setToastError(`Generarea imaginii a eșuat. Motiv: ${errorMessage}`);
+            // Close the loading modal
             setImageModal({ imageUrl: '', prompt: '', isLoading: false });
         }
     }, [history]);
 
-
-    // Handles toggling the "Like" state for a message
     const handleToggleLike = useCallback((messageId: string) => {
         setHistory(prev => prev.map(item =>
             item.id === messageId && 'player' in item ? { ...item, isLiked: !item.isLiked } : item
         ));
     }, []);
 
-    // Handles marking a message as "Too Complicated"
     const handleMarkTooComplex = useCallback((messageId: string) => {
-        // Limita este verificată în componenta MessageCard, permițând până la 3 click-uri
         setHistory(prev => prev.map(item =>
             item.id === messageId && 'player' in item ? { ...item, isMarkedTooComplex: true } : item
         ));
         setTooComplicatedCount(prev => prev + 1);
     }, []);
 
-    // Ends the duel and fetches the post-game analysis
     const handleEndDuel = useCallback(async (reason: string) => {
         setIsLoading(true);
         setIsGameOver(true);
@@ -185,7 +163,6 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         setIsLoading(false);
     }, [history, settings]);
     
-    // Handles submission of a new challenge, now including the predefined reason
     const handleSubmitChallenge = useCallback(async (msg1: DuelMessage, msg2: DuelMessage, predefinedReason: string, argument: string, wager: number) => {
         setIsChallengeModalOpen(false);
         setIsLoading(true);
@@ -225,8 +202,6 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
 
     }, [history, settings, aiScore]);
 
-
-    // Generates a comprehensive text report of the duel for download
     const handleDownloadReport = useCallback(() => {
         const reportParts: string[] = [];
         reportParts.push(" Duelul Ideilor - Raport Final ");
@@ -299,7 +274,6 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         URL.revokeObjectURL(url);
     }, [history, settings, playerScore, aiScore, gameOverMessage, challengeHistory]);
 
-    // Handles user input submission
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputValue.trim() || isLoading || isGameOver) return;
@@ -313,7 +287,6 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         setHistory(currentHistory);
         setInputValue('');
 
-        // Trimite nivelul metaforic curent, potențial ajustat, către API.
         const response = await getAiDuelResponse(
             currentHistory, 
             playerScore, 
@@ -324,7 +297,6 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
         const duelHistory = currentHistory.filter(item => 'player' in item);
         const finalPlayerScore = duelHistory.length === 1 ? 10 : response.playerScore;
         const finalPlayerExplanation = duelHistory.length === 1 ? "Un început excelent! Primești 10 puncte pentru curajul de a deschide duelul." : response.playerScoreExplanation;
-
 
         const updatedUserMessage: DuelMessage = {
             ...userMessage, score: finalPlayerScore, explanation: finalPlayerExplanation, improvedExamples: response.playerImprovedExamples
@@ -356,7 +328,7 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
 
     return (
         <div className="w-full h-[85vh] max-w-4xl flex flex-col glassmorphism rounded-2xl p-4 sm:p-6 fade-in">
-            {/* Header with scores: AI on left, Player on right */}
+            {/* Header with scores */}
             <div className="flex justify-between items-center pb-4 border-b border-[var(--card-border)]">
                 <div className="flex items-center gap-3">
                     <AiIcon className="h-10 w-10 text-purple-500" />
@@ -365,9 +337,7 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
                         <div className="text-xl font-black text-purple-600">{aiScore} puncte</div>
                     </div>
                 </div>
-                
                 <div className="font-bold text-2xl text-[var(--text-accent)]">VS</div>
-                
                 <div className="flex items-center gap-3">
                     <div className="text-right">
                         <div className="font-bold text-lg text-[var(--text-primary)]">Jucător</div>
@@ -469,6 +439,15 @@ const DuelPage: React.FC<DuelPageProps> = ({ settings, onEndDuel }) => {
                     challengeCount={challengeCount}
                     onClose={() => setIsChallengeModalOpen(false)}
                     onSubmit={handleSubmitChallenge}
+                />
+            )}
+
+            {/* Toast for error notifications */}
+            {toastError && (
+                <Toast 
+                    message={toastError} 
+                    type="error" 
+                    onClose={() => setToastError(null)} 
                 />
             )}
         </div>
