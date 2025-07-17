@@ -10,11 +10,26 @@ interface ChallengeModalProps {
     playerScore: number;
     challengeCount: number;
     onClose: () => void;
-    onSubmit: (msg1: DuelMessage, msg2: DuelMessage, argument: string, wager: number) => void;
+    onSubmit: (msg1: DuelMessage, msg2: DuelMessage, predefinedReason: string, argument: string, wager: number) => void;
 }
+
+// Constant list of predefined reasons for a challenge
+const CHALLENGE_REASONS = [
+    "Repetiție evidentă: AI-ul a repetat o idee sau un concept anterior.",
+    "Răspuns irelevant: Replica AI-ului nu are legătură cu mesajul meu.",
+    "Anihilare eșuată: Răspunsul AI nu anulează, transformă sau depășește replica mea.",
+    "Negație plată: AI-ul a folosit o negație simplă, fără a construi o nouă imagine.",
+    "Răspuns vag/gol: Replica AI-ului este prea generală sau goală de sens.",
+    "Logicâ deficitară: Relația de anihilare propusă de AI este forțată sau ilogică.",
+    "Lipsa metaforei: Răspunsul este pur literal, contrar nivelului de dificultate.",
+    "Încălcare subiect interzis: AI-ul a folosit un concept dintr-un subiect interzis.",
+    "Regres în complexitate: Răspunsul AI este mult prea simplu pentru dificultatea setată.",
+    "Clișeu uzat: Replica AI-ului este o metaforă comună, lipsită de originalitate."
+];
 
 const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, challengeCount, onClose, onSubmit }) => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [selectedReason, setSelectedReason] = useState<string>('');
     const [argument, setArgument] = useState('');
     const [wager, setWager] = useState(1); // For the 3rd challenge
 
@@ -47,7 +62,8 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
     };
 
     const handleSubmit = () => {
-        if (selectedIds.length !== 2 || !canAfford) return;
+        // Submission is blocked if conditions aren't met
+        if (isSubmitDisabled) return;
 
         const msg1 = duelMessages.find(m => m.id === selectedIds[0]);
         const msg2 = duelMessages.find(m => m.id === selectedIds[1]);
@@ -55,24 +71,25 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
 
         // Ensure msg1 is always the earlier message
         if (parseInt(msg1.id.split('-')[1]) > parseInt(msg2.id.split('-')[1])) {
-            onSubmit(msg2, msg1, argument, cost);
+            onSubmit(msg2, msg1, selectedReason, argument, cost);
         } else {
-            onSubmit(msg1, msg2, argument, cost);
+            onSubmit(msg1, msg2, selectedReason, argument, cost);
         }
     };
     
-    const isSubmitDisabled = selectedIds.length !== 2 || !canAfford;
+    // The submit button is disabled if 2 messages and a reason are not selected, or if the player can't afford it.
+    const isSubmitDisabled = selectedIds.length !== 2 || !canAfford || !selectedReason;
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-30 fade-in" onClick={onClose}>
             <div className="glassmorphism rounded-2xl p-6 sm:p-8 max-w-3xl w-full text-left max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex-shrink-0">
                     <h3 className="text-xl sm:text-2xl font-bold text-[var(--text-accent-yellow)] mb-2">Depune Contestație</h3>
-                    <p className="text-[var(--text-secondary)] mb-4">Selectează exact două mesaje pentru a contesta o repetare a AI-ului sau o "anihilare" neconformă.</p>
+                    <p className="text-[var(--text-secondary)] mb-4">Selectează exact două mesaje și alege motivul principal al contestației.</p>
                 </div>
                 
                 {/* Messages List */}
-                <div className="flex-grow overflow-y-auto pr-4 my-4 border-y border-[var(--card-border)] py-4">
+                <div className="flex-grow overflow-y-auto pr-4 my-2 border-y border-[var(--card-border)] py-4">
                     <div className="space-y-3">
                         {duelMessages.length === 0 && <p className="text-[var(--text-secondary)] text-center">Nu există mesaje de contestat încă.</p>}
                         {duelMessages.map(msg => {
@@ -99,10 +116,32 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                     </div>
                 </div>
 
-                {/* Argument and Wager Section */}
+                {/* Reason and Argument Section */}
                 <div className="flex-shrink-0 space-y-4">
+                    {/* Predefined Reasons Selector */}
                     <div>
-                        <label htmlFor="argument" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Argument (Opțional)</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Motivul Contestației (obligatoriu)</label>
+                        <div className="flex flex-wrap gap-2">
+                            {CHALLENGE_REASONS.map(reason => (
+                                <button 
+                                    key={reason} 
+                                    onClick={() => setSelectedReason(reason)}
+                                    title={reason}
+                                    className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 ${
+                                        selectedReason === reason 
+                                        ? 'bg-yellow-500 border-yellow-400 text-white shadow-md' 
+                                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-gray-400/20'
+                                    }`}
+                                >
+                                    {reason.split(':')[0]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Argument Text Area */}
+                    <div>
+                        <label htmlFor="argument" className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Argument Suplimentar (Opțional)</label>
                         <textarea
                             id="argument"
                             value={argument}
@@ -144,7 +183,7 @@ const ChallengeModal: React.FC<ChallengeModalProps> = ({ history, playerScore, c
                         <button 
                             onClick={handleSubmit} 
                             disabled={isSubmitDisabled}
-                            title={isSubmitDisabled ? "Trebuie să selectezi 2 mesaje și să ai suficiente puncte" : "Trimite contestația"}
+                            title={isSubmitDisabled ? "Trebuie să selectezi 2 mesaje, un motiv, și să ai suficiente puncte" : "Trimite contestația"}
                             className="bg-yellow-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-yellow-700 disabled:bg-gray-500/50 disabled:cursor-not-allowed transition-colors"
                         >
                             Contestă ({cost}p)

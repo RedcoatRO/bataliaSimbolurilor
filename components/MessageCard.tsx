@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import type { DuelMessage, ImprovedExample, SystemMessage, HistoryItem } from '../types';
 import { PlayerType } from '../types';
-import { PlayerIcon, AiIcon, SparklesIcon, QuestionMarkIcon, LikeIcon, DislikeIcon, GavelIcon } from './Icons';
+import { PlayerIcon, AiIcon, SparklesIcon, QuestionMarkIcon, LikeIcon, DislikeIcon, GavelIcon, InfoIcon, PaintBrushIcon } from './Icons';
 
 // Sub-component for showing improved examples
 const ImprovedExamples: React.FC<{ examples: ImprovedExample[] }> = ({ examples }) => {
@@ -39,18 +39,26 @@ const ScoreBadge: React.FC<{ score: number }> = ({ score }) => (
     </div>
 );
 
-// New sub-component for displaying system messages (like challenge results)
+// Sub-component for displaying system messages, now with conditional styling
 const SystemMessageCard: React.FC<{ message: SystemMessage }> = ({ message }) => {
-    const borderColor = message.isSuccess ? 'border-green-500/50' : 'border-red-500/50';
-    const textColor = message.isSuccess ? 'text-[var(--text-accent-green)]' : 'text-[var(--text-accent-red)]';
+    const isChallenge = message.text.toLowerCase().includes('contestație');
+    
+    // Define styles based on message type (Challenge vs. Info)
+    const icon = isChallenge ? <GavelIcon className="h-6 w-6 flex-shrink-0" /> : <InfoIcon className="h-6 w-6 flex-shrink-0" />;
+    const borderColor = isChallenge
+        ? (message.isSuccess ? 'border-green-500/50' : 'border-red-500/50')
+        : 'border-blue-500/50';
+    const textColor = isChallenge 
+        ? (message.isSuccess ? 'text-[var(--text-accent-green)]' : 'text-[var(--text-accent-red)]')
+        : 'text-blue-400';
 
     return (
         <div className="my-4 flex justify-center items-center gap-4 text-sm text-[var(--text-secondary)] fade-in">
             <hr className={`flex-grow ${borderColor}`} />
-            <div className={`flex items-center gap-3 glassmorphism p-3 rounded-xl border ${borderColor}`}>
-                <GavelIcon className={`h-6 w-6 flex-shrink-0 ${textColor}`} />
+            <div className={`flex items-center gap-3 glassmorphism p-3 rounded-xl border ${borderColor} ${textColor}`}>
+                {icon}
                 <div className="text-left">
-                    <p className={`font-bold ${textColor}`}>{message.text}</p>
+                    <p className="font-bold">{message.text}</p>
                     <p className="text-xs text-[var(--text-secondary)]">{message.details}</p>
                 </div>
             </div>
@@ -59,16 +67,18 @@ const SystemMessageCard: React.FC<{ message: SystemMessage }> = ({ message }) =>
     );
 };
 
+
 // Main MessageCard component, now handles both DuelMessage and SystemMessage
 interface MessageCardProps {
   message: HistoryItem;
   onExplainRequest: (messageId: string) => void;
+  onVisualizeRequest: (messageId: string) => void;
   onToggleLike: (messageId: string) => void;
   onMarkTooComplex: (messageId: string) => void;
   tooComplicatedCount: number;
 }
 
-const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, onToggleLike, onMarkTooComplex, tooComplicatedCount }) => {
+const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, onVisualizeRequest, onToggleLike, onMarkTooComplex, tooComplicatedCount }) => {
     // Type guard to render the correct card type
     if (!('player' in message)) {
         return <SystemMessageCard message={message} />;
@@ -76,8 +86,10 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, on
 
     const duelMessage = message;
     const isUser = duelMessage.player === PlayerType.USER;
-    // Determine if the "Too Complicated" button should be usable for this message
+    // Allow up to 3 "dislike" clicks. The 4th will be disabled.
     const canMarkComplex = tooComplicatedCount < 3 && !duelMessage.isMarkedTooComplex;
+    // Lowered the score requirement to allow visualization for notes 7 and 8.
+    const canVisualize = duelMessage.score !== undefined && duelMessage.score >= 7;
     
     const userCardClass = 'bg-purple-600 text-white rounded-br-none';
     const aiCardClass = 'bg-gray-400/20 text-[var(--text-primary)] rounded-bl-none';
@@ -101,6 +113,19 @@ const MessageCard: React.FC<MessageCardProps> = ({ message, onExplainRequest, on
 
              <div className="flex flex-col gap-2 items-center self-start pt-1 text-[var(--text-secondary)]">
                 {duelMessage.score !== undefined && <ScoreBadge score={duelMessage.score} />}
+                
+                 {/* Action buttons for both User and AI messages with high scores */}
+                {canVisualize && (
+                     <button 
+                        onClick={() => onVisualizeRequest(duelMessage.id)} 
+                        className={`${duelMessage.generatedImage ? 'text-teal-500' : ''} hover:text-teal-400 transition-colors`}
+                        aria-label="Vizualizează această metaforă"
+                        title="Generează o imagine pentru această replică"
+                    >
+                        <PaintBrushIcon className="h-5 w-5" />
+                    </button>
+                )}
+
                 {!isUser && (
                     <>
                         <button 

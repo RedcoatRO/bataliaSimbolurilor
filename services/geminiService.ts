@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
@@ -9,6 +10,8 @@ if (!API_KEY) {
 const ai = new GoogleGenAI({ apiKey: API_KEY || "fallback_key_for_initialization" });
 
 const model = 'gemini-2.5-flash';
+const imageModel = 'imagen-3.0-generate-002';
+
 
 // --- DUEL RULES CONSTANT ---
 // This constant holds the master ruleset for the game.
@@ -116,10 +119,16 @@ const generateSystemInstruction = (history: HistoryItem[], settings: DuelSetting
         playerFeedbackSection += "\n- **Răspunsuri Apreciate:** Niciunul încă.";
     }
 
+    const favoriteThemesText = settings.favoriteThemes && settings.favoriteThemes.length > 0 
+        ? settings.favoriteThemes.join(', ') 
+        : 'Niciuna';
+
     return `Ești un AI adversar într-un duel creativ și simbolic de cuvinte numit "Duelul Ideilor". Jocul se desfășoară în limba română. Obiectivul este să stimulezi imaginația jucătorului prin metafore și concepte neașteptate, respectând cu strictețe regulamentul de mai jos.
 
 **Contextul Duelului Curent:**
 - **Nivel de Dificultate:** ${settings.difficulty}/5. Descriere: ${difficultyDescriptions[settings.difficulty - 1]}
+- **Nivel Metaforic (0-20):** ${settings.metaphoricalLevel}. Ești OBLIGAT să-ți calibrezi fiecare răspuns la acest nivel. 0 înseamnă limbaj concret, zero metafore. 20 înseamnă limbaj extrem de abstract, poetic și filosofic.
+- **Teme Favorite (Prioritare):** ${favoriteThemesText}. Ești OBLIGAT să încerci să integrezi aceste concepte în răspunsurile tale, acolo unde este posibil, pentru a ghida duelul în direcția aleasă de jucător.
 - **Subiecte Interzise:** ${settings.excludedTopics.length > 0 ? settings.excludedTopics.join(', ') : 'Niciunul'}.
 - **Istoricul Conversației:**
 ${historyText}
@@ -132,7 +141,7 @@ ${DUEL_RULES_TEXT}
 1.  **Reguli de Notare Critice (PRIORITATE MAXIMĂ):**
     - **Primul Răspuns al Jucătorului:** Primul răspuns al jucătorului în duel (când istoricul conține doar un mesaj) primește **OBLIGATORIU** nota 10. Explicația scorului trebuie să fie încurajatoare, menționând că este un bonus pentru a începe duelul.
     - **Echilibru Scor:** Scorul pe care ți-l acorzi (aiScore) nu poate fi **NICIODATĂ** cu mai mult de 1 punct peste scorul pe care tocmai l-ai acordat jucătorului (playerScore). Exemplu: dacă playerScore este 5, aiScore poate fi maxim 6. Dacă playerScore este 9, aiScore poate fi maxim 9 (deoarece nu îți poți da 10). Această regulă se aplică după prima rundă.
-2.  **Adaptare:** Adaptează-ți complexitatea la nivelul de dificultate și la feedback-ul primit.
+2.  **Adaptare:** Adaptează-ți complexitatea la nivelul de dificultate, la nivelul metaforic specificat și la feedback-ul primit.
 3.  **Respectarea Subiectelor Interzise:** Dacă se menționează un concept interzis, acordă o penalizare (scor mic) și explică încălcarea regulii.
 4.  **Feedback Constructiv:** Dacă scorul jucătorului e sub 10, oferă OBLIGATORIU exemple concrete de răspunsuri mai bune.
 5.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei.
@@ -225,15 +234,21 @@ export const getPostGameAnalysis = async (history: HistoryItem[], settings: Duel
         return entry;
     }).join('\n');
 
+    const favoriteThemesText = settings.favoriteThemes && settings.favoriteThemes.length > 0
+        ? settings.favoriteThemes.join(', ')
+        : 'Niciunul';
+
     const prompt = `Un jucător tocmai a terminat un "Duel al Ideilor".
-    - Nivelul de dificultate a fost: ${settings.difficulty}/5.
-    - Subiectele evitate au fost: ${settings.excludedTopics.join(', ') || 'Niciunul'}.
-    - Istoricul duelului este:
-    ${historyText}
-    
-    Analizează performanța jucătorului și oferă-i o analiză personalizată și recomandări. Recomandările (cărți, autori, concepte de studiat) trebuie să fie adaptate nivelului de dificultate ales. Fii încurajator, specific și poetic.
-    Pune accent în analiză pe conceptele din spatele răspunsurilor apreciate de jucător, dacă există:
-    ${likedResponses.join('\n') || 'Niciunul'}`;
+- Nivelul de dificultate a fost: ${settings.difficulty}/5.
+- Nivelul metaforic setat a fost: ${settings.metaphoricalLevel} (pe o scară de la 0 la 20).
+- Temele favorite selectate au fost: ${favoriteThemesText}.
+- Subiectele evitate au fost: ${settings.excludedTopics.join(', ') || 'Niciunul'}.
+- Istoricul duelului este:
+${historyText}
+
+Analizează performanța jucătorului și oferă-i o analiză personalizată și recomandări. Recomandările (cărți, autori, concepte de studiat) trebuie să fie adaptate nivelului de dificultate ales și TEMELOR FAVORITE. Fii încurajator, specific și poetic.
+Pune accent în analiză pe conceptele din spatele răspunsurilor apreciate de jucător, dacă există:
+${likedResponses.join('\n') || 'Niciunul'}`;
 
     try {
         const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: 0.8 } });
@@ -249,7 +264,7 @@ export const getPostGameAnalysis = async (history: HistoryItem[], settings: Duel
 
 // New function for analyzing a player's challenge
 export const analyzeChallenge = async (
-    challenge: { msg1: DuelMessage, msg2: DuelMessage, argument?: string, wager: number },
+    challenge: { msg1: DuelMessage, msg2: DuelMessage, predefinedReason: string, argument?: string, wager: number },
     history: HistoryItem[],
     settings: DuelSettings
 ): Promise<GeminiChallengeAnalysisResponse> => {
@@ -280,10 +295,11 @@ ${DUEL_RULES_TEXT}
 
 **Detalii Contestație:**
 - **Tip Contestație:** ${challengeType}. Jucătorul susține că adversarul AI fie a repetat un răspuns, fie nu a anihilat corect o replică anterioară, conform regulamentului.
+- **Motivul Predefinit (ales de jucător):** ${challenge.predefinedReason}
 - **Miza jucătorului:** ${challenge.wager} puncte.
 - **Mesaj 1:** "${challenge.msg1.text}" (Autor: ${challenge.msg1.player})
 - **Mesaj 2:** "${challenge.msg2.text}" (Autor: ${challenge.msg2.player})
-- **Argumentul jucătorului:** ${challenge.argument || "Niciun argument."}
+- **Argumentul suplimentar al jucătorului:** ${challenge.argument || "Niciun argument."}
 
 **Contextul Jocului:**
 - Nivel de dificultate: ${settings.difficulty}/5 (1=copil, 5=expert).
@@ -301,6 +317,7 @@ ${userCreativityHistory}
     - **Argument:** Un argument bun crește șansele de aprobare.
 3.  **Stabilirea Penalizării:** Dacă aprobi contestația ('isApproved: true'), stabilește o penalizare pentru AI între 1 și ${challenge.wager * 3} puncte. O încălcare flagrantă merită o penalizare maximă. Una subtilă, o penalizare minimă.
 4.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei. Fără text suplimentar.
+5.  **Focalizare pe Motiv:** Analizează contestația **prioritar** prin prisma motivului predefinit selectat de jucător. Argumentul suplimentar este secundar.
 
 Acționează acum ca un judecător și oferă verdictul.`;
 
@@ -326,5 +343,47 @@ Acționează acum ca un judecător și oferă verdictul.`;
     } catch (error) {
         console.error("Error calling Gemini API for challenge analysis:", error);
         return { isApproved: false, reasoning: "A apărut o eroare în timpul deliberării. Contestația a fost respinsă automat.", penalty: 0 };
+    }
+};
+
+/**
+ * Generates an image based on a text prompt using the Imagen model.
+ * The prompt should be contextual, describing the interaction between two ideas.
+ * @param prompt The text to visualize.
+ * @returns A promise that resolves to a base64 encoded image string.
+ */
+export const generateImageForPrompt = async (prompt: string): Promise<string> => {
+    // Fallback for development without an API key
+    if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
+        // This is a placeholder 1x1 transparent GIF.
+        const placeholderBase64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+        // Simulate network delay
+        return new Promise(resolve => setTimeout(() => resolve(placeholderBase64), 2000));
+    }
+    
+    // Enhance the prompt for better artistic results, tailored for conceptual illustration.
+    const artisticPrompt = `A symbolic and conceptual digital painting, cinematic lighting, dramatic, high detail, masterpiece, illustrating: ${prompt}`;
+
+    try {
+        const response = await ai.models.generateImages({
+            model: imageModel,
+            prompt: artisticPrompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: '1:1', // Square images fit well in modals
+            },
+        });
+
+        if (!response.generatedImages || response.generatedImages.length === 0) {
+            throw new Error("API did not return any images.");
+        }
+
+        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        return base64ImageBytes;
+
+    } catch (error) {
+        console.error("Error calling Gemini API for image generation:", error);
+        throw new Error("Failed to generate image from prompt.");
     }
 };

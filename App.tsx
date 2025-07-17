@@ -12,7 +12,7 @@ type View = 'login' | 'dashboard' | 'duel';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('login');
-  const [duelSettings, setDuelSettings] = useState<DuelSettings>({ difficulty: 2, excludedTopics: [] });
+  const [duelSettings, setDuelSettings] = useState<DuelSettings>({ difficulty: 3, excludedTopics: [], favoriteThemes: [], metaphoricalLevel: 7 });
   // State to control the visibility of the Rules Modal
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 

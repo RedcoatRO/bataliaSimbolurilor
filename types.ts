@@ -19,6 +19,7 @@ export interface DuelMessage {
   detailedExplanation?: string; // For the "Explain this" feature
   isLiked?: boolean; // For the "Like" button
   isMarkedTooComplex?: boolean; // For the "Too complicated" button
+  generatedImage?: string; // To store the base64 of the generated image
 }
 
 export interface GeminiDuelResponse {
@@ -35,6 +36,8 @@ export interface GeminiDuelResponse {
 export interface DuelSettings {
     difficulty: number;
     excludedTopics: string[];
+    favoriteThemes: string[];
+    metaphoricalLevel: number;
 }
 
 // Type for displaying system messages in the chat history (e.g., challenge results)
@@ -52,12 +55,13 @@ export type HistoryItem = DuelMessage | SystemMessage;
 
 // Type for storing the complete result of a challenge
 export interface ChallengeResult {
-  id: string;
+  id:string;
   wager: number;
   isApproved: boolean;
   reasoning: string;
   penalty: number; // How many points AI lost
   challengedMessages: { id1: string, text1: string, id2: string, text2: string };
+  predefinedReason: string; // The reason chosen from the list
   userArgument?: string;
 }
 
