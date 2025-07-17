@@ -1,14 +1,37 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
 
-// The API key is read from environment variables and is assumed to be present.
-// The application will now make real API calls for all functionalities.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+// The AI client will be initialized lazily to prevent app crashes
+// in environments where process.env is not available on load.
+let ai: GoogleGenAI | null = null;
 const model = 'gemini-2.5-flash';
 const imageModel = 'imagen-3.0-generate-002';
+
+
+/**
+ * Lazily initializes and returns the GoogleGenAI client.
+ * This prevents the app from crashing on load in browser environments
+ * where process.env is not defined.
+ * @throws An error if the API key is not configured in the environment.
+ */
+const getAiClient = (): GoogleGenAI => {
+    if (ai) {
+        return ai;
+    }
+    
+    // In a browser environment, `process` is not defined. We check for its
+    // existence to safely access `process.env.API_KEY`. The hosting platform
+    // is responsible for making this variable available.
+    const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+
+    if (!apiKey) {
+        throw new Error("Cheia API (API_KEY) nu este configurată în mediul de rulare. Funcționalitatea AI este dezactivată.");
+    }
+
+    ai = new GoogleGenAI({ apiKey });
+    return ai;
+};
 
 
 // --- DUEL RULES CONSTANT ---
@@ -162,7 +185,8 @@ export const getAiDuelResponse = async (history: HistoryItem[], playerScore: num
     const userPrompt = `Jucătorul a spus: "${lastPlayerMessage}". Analizează, răspunde și evaluează conform regulilor și contextului.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const client = getAiClient();
+        const response = await client.models.generateContent({
             model: model, contents: userPrompt,
             config: { systemInstruction, responseMimeType: "application/json", responseSchema, temperature: 0.8 }
         });
@@ -186,14 +210,16 @@ export const getExplanationForResponse = async (textToExplain: string, difficult
     const ageGroup = Math.max(10, difficulty * 3 + 5); // Simple mapping of difficulty to assumed age for explanation
     const prompt = `Explică următoarea afirmație ca și cum ai vorbi cu cineva de ${ageGroup} ani. Folosește un limbaj clar și simplu. Oferă cel puțin 10 idei, exemple sau pași pentru a înțelege conceptul din spatele ei. Fii încurajator și educativ. Afirmația: "${textToExplain}"`;
     try {
-        const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: 0.7 } });
+        const client = getAiClient();
+        const response = await client.models.generateContent({ model, contents: prompt, config: { temperature: 0.7 } });
         if (!response || !response.text) {
             return "Nu am putut genera o explicație în acest moment. Te rog încearcă din nou.";
         }
         return response.text;
     } catch (error) {
         console.error("Error getting explanation:", error);
-        return "Nu am putut genera o explicație în acest moment. Te rog încearcă din nou.";
+        const errorMessage = error instanceof Error ? error.message : "Eroare necunoscută";
+        return `Nu am putut genera o explicație. Motiv: ${errorMessage}.`;
     }
 };
 
@@ -226,14 +252,16 @@ Pune accent în analiză pe conceptele din spatele răspunsurilor apreciate de j
 ${likedResponses.join('\n') || 'Niciunul'}`;
 
     try {
-        const response = await ai.models.generateContent({ model, contents: prompt, config: { temperature: 0.8 } });
+        const client = getAiClient();
+        const response = await client.models.generateContent({ model, contents: prompt, config: { temperature: 0.8 } });
         if (!response || !response.text) {
              return "Fiecare idee este o sămânță. Continuă să le cultivi și vei construi o grădină a minții de neegalat. Felicitări pentru duel!";
         }
         return response.text;
     } catch (error) {
         console.error("Error getting post-game analysis:", error);
-        return "Fiecare idee este o sămânță. Continuă să le cultivi și vei construi o grădină a minții de neegalat. Felicitări pentru duel!";
+        const errorMessage = error instanceof Error ? error.message : "Eroare necunoscută";
+        return `Nu am putut genera analiza finală. Motiv: ${errorMessage}.`;
     }
 };
 
@@ -294,7 +322,8 @@ ${userCreativityHistory}
 Acționează acum ca un judecător și oferă verdictul.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const client = getAiClient();
+        const response = await client.models.generateContent({
             model: model,
             contents: "Evaluează contestația conform instrucțiunilor tale de sistem.",
             config: { 
@@ -314,7 +343,8 @@ Acționează acum ca un judecător și oferă verdictul.`;
         return parsedResponse;
     } catch (error) {
         console.error("Error calling Gemini API for challenge analysis:", error);
-        return { isApproved: false, reasoning: "A apărut o eroare în timpul deliberării. Contestația a fost respinsă automat.", penalty: 0 };
+        const reasoning = `A apărut o eroare în timpul deliberării. Contestația a fost respinsă automat. Motiv: ${error instanceof Error ? error.message : "Eroare necunoscută"}`;
+        return { isApproved: false, reasoning: reasoning, penalty: 0 };
     }
 };
 
@@ -329,7 +359,8 @@ export const generateImageForPrompt = async (prompt: string): Promise<string> =>
     const artisticPrompt = `A symbolic and conceptual digital painting, cinematic lighting, dramatic, high detail, masterpiece, illustrating: ${prompt}`;
 
     try {
-        const response = await ai.models.generateImages({
+        const client = getAiClient();
+        const response = await client.models.generateImages({
             model: imageModel,
             prompt: artisticPrompt,
             config: {
@@ -348,6 +379,7 @@ export const generateImageForPrompt = async (prompt: string): Promise<string> =>
 
     } catch (error) {
         console.error("Error calling Gemini API for image generation:", error);
-        throw new Error("Failed to generate image from prompt.");
+        // Re-throw the error so the UI component can handle it (e.g., close the loading modal)
+        throw error;
     }
 };
