@@ -3,11 +3,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-    console.warn("API_KEY environment variable not set. Using a placeholder. The app will not function correctly.");
-}
-const ai = new GoogleGenAI({ apiKey: API_KEY || "fallback_key_for_initialization" });
+// The API key is read from environment variables and is assumed to be present.
+// The application will now make real API calls for all functionalities.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const model = 'gemini-2.5-flash';
 const imageModel = 'imagen-3.0-generate-002';
@@ -160,22 +158,6 @@ export const getAiDuelResponse = async (history: HistoryItem[], playerScore: num
         };
     }
 
-    if ((!API_KEY || API_KEY === "fallback_key_for_initialization") && duelHistory.length === 1) {
-        return new Promise(resolve => setTimeout(() => resolve({
-            aiResponseText: "Eu sunt ecoul ideii tale, reflectat într-o oglindă a posibilităților.", playerScore: 10, playerScoreExplanation: "Un început excelent! Primești 10 puncte pentru curajul de a deschide duelul.",
-            playerImprovedExamples: [],
-            aiScore: 9, aiScoreExplanation: "Un răspuns metaforic ce deschide noi căi (Depășire prin sens).", isGameOver: false, gameOverReason: ""
-        }), 1500));
-    }
-    
-    if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
-        return new Promise(resolve => setTimeout(() => resolve({
-            aiResponseText: "Eu sunt ecoul ideii tale, reflectat într-o oglindă a posibilităților.", playerScore: 7, playerScoreExplanation: "Bună conexiune, dar putem adăuga mai multă profunzime.",
-            playerImprovedExamples: [{ score: 8, text: "Eu sunt furtuna care-ți stinge focul." }, { score: 9, text: "Eu sunt tăcerea de după cuvântul tău." }],
-            aiScore: 8, aiScoreExplanation: "Un răspuns metaforic ce deschide noi căi (Depășire prin sens).", isGameOver: false, gameOverReason: ""
-        }), 1500));
-    }
-
     const systemInstruction = generateSystemInstruction(history, settings);
     const userPrompt = `Jucătorul a spus: "${lastPlayerMessage}". Analizează, răspunde și evaluează conform regulilor și contextului.`;
 
@@ -201,9 +183,6 @@ export const getAiDuelResponse = async (history: HistoryItem[], playerScore: num
 
 // New function to get a detailed explanation for an AI response
 export const getExplanationForResponse = async (textToExplain: string, difficulty: number): Promise<string> => {
-    if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
-        return Promise.resolve("Aceasta este o metaforă despre potențial. Așa cum o oglindă poate crea multiple reflexii, la fel și o idee poate genera nenumărate posibilități noi. Răspunsul sugerează că ideea mea nu anulează ideea ta, ci o amplifică, deschizând noi orizonturi de gândire. Este un mod de a arăta superioritate prin colaborare, nu prin conflict.");
-    }
     const ageGroup = Math.max(10, difficulty * 3 + 5); // Simple mapping of difficulty to assumed age for explanation
     const prompt = `Explică următoarea afirmație ca și cum ai vorbi cu cineva de ${ageGroup} ani. Folosește un limbaj clar și simplu. Oferă cel puțin 10 idei, exemple sau pași pentru a înțelege conceptul din spatele ei. Fii încurajator și educativ. Afirmația: "${textToExplain}"`;
     try {
@@ -220,10 +199,6 @@ export const getExplanationForResponse = async (textToExplain: string, difficult
 
 // New function for post-game analysis and recommendations
 export const getPostGameAnalysis = async (history: HistoryItem[], settings: DuelSettings): Promise<string> => {
-    if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
-        return Promise.resolve("Ai purtat un duel excelent! Pentru a explora mai departe, ai putea citi 'Micul Prinț' pentru a vedea cum ideile simple pot avea înțelesuri profunde. Felicitări!");
-    }
-    
     const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
     const likedResponses = duelHistory.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
     
@@ -268,9 +243,6 @@ export const analyzeChallenge = async (
     history: HistoryItem[],
     settings: DuelSettings
 ): Promise<GeminiChallengeAnalysisResponse> => {
-     if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
-        return Promise.resolve({ isApproved: Math.random() > 0.5, reasoning: "Acesta este un rezultat simulat. În mod normal, aș analiza similaritatea semantică și contextuală.", penalty: Math.random() > 0.5 ? challenge.wager * 2 : 0 });
-    }
     const challengeResponseSchema = {
         type: Type.OBJECT,
         properties: {
@@ -353,14 +325,6 @@ Acționează acum ca un judecător și oferă verdictul.`;
  * @returns A promise that resolves to a base64 encoded image string.
  */
 export const generateImageForPrompt = async (prompt: string): Promise<string> => {
-    // Fallback for development without an API key
-    if (!API_KEY || API_KEY === "fallback_key_for_initialization") {
-        // This is a placeholder 1x1 transparent GIF.
-        const placeholderBase64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-        // Simulate network delay
-        return new Promise(resolve => setTimeout(() => resolve(placeholderBase64), 2000));
-    }
-    
     // Enhance the prompt for better artistic results, tailored for conceptual illustration.
     const artisticPrompt = `A symbolic and conceptual digital painting, cinematic lighting, dramatic, high detail, masterpiece, illustrating: ${prompt}`;
 
