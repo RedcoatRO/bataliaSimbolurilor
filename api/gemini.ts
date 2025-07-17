@@ -47,9 +47,15 @@ export default async function handler(req: any, res: any) {
         break;
       case 'generateImages':
         const imageResult: GenerateImagesResponse = await ai.models.generateImages(payload);
-        // Similar cu generateContent, ne asigurăm că trimitem un obiect simplu.
+        // Similar cu generateContent, ne asigurăm că trimitem un obiect simplu (Plain Old JavaScript Object)
+        // pentru a evita problemele de serializare unde getteri sau alte proprietăți ale clasei se pierd.
+        // Reconstruim manual obiectul cu datele de care clientul are nevoie.
         responseData = {
-          generatedImages: imageResult.generatedImages,
+          generatedImages: imageResult.generatedImages.map(img => ({
+            image: {
+              imageBytes: img.image.imageBytes,
+            },
+          })),
         };
         break;
       default:
