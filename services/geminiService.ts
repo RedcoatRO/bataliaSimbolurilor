@@ -1,42 +1,42 @@
-import { GoogleGenAI, Type } from "@google/genai";
+
+import { GenerateContentResponse, GenerateImageResponse, Type } from "@google/genai";
 import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
 
-// The AI client will be initialized lazily to prevent app crashes
-// in environments where process.env is not available on load.
-let ai: GoogleGenAI | null = null;
 const model = 'gemini-2.5-flash';
 const imageModel = 'imagen-3.0-generate-002';
 
-
 /**
- * Lazily initializes and returns the GoogleGenAI client.
- * This prevents the app from crashing on load in browser environments
- * where process.env is not defined.
- * @throws An error if the API key is not configured in the environment.
+ * A generic and secure fetcher function to communicate with our serverless proxy.
+ * @param path The API endpoint to call (e.g., 'generateContent', 'generateImages').
+ * @param payload The data to send to the Gemini API.
+ * @returns The response from the Gemini API.
  */
-const getAiClient = (): GoogleGenAI => {
-    if (ai) {
-        return ai;
-    }
-    
-    // In a browser environment, `process` is not defined. We check for its
-    // existence to safely access `process.env.API_KEY`. The hosting platform
-    // is responsible for making this variable available.
-    const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+const fetchFromProxy = async (path: 'generateContent' | 'generateImages', payload: any): Promise<any> => {
+    try {
+        const response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ path, payload }),
+        });
 
-    if (!apiKey) {
-        throw new Error("Cheia API (API_KEY) nu este configurată în mediul de rulare. Funcționalitatea AI este dezactivată.");
-    }
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+            throw new Error(`API Proxy Error: ${response.statusText} - ${errorData.error || 'No details'}`);
+        }
 
-    ai = new GoogleGenAI({ apiKey });
-    return ai;
+        return await response.json();
+
+    } catch (error) {
+        console.error(`Failed to fetch from proxy for path ${path}:`, error);
+        throw error; // Re-throw the error to be handled by the calling function
+    }
 };
 
 
 // --- DUEL RULES CONSTANT ---
-// This constant holds the master ruleset for the game.
-// It is used to instruct both the AI opponent and the AI judge.
 const DUEL_RULES_TEXT = `
 **REGULAMENTUL OFICIAL "DUELUL IDEILOR"**
 
@@ -114,7 +114,6 @@ const responseSchema = {
     required: ['aiResponseText', 'playerScore', 'playerScoreExplanation', 'playerImprovedExamples', 'aiScore', 'aiScoreExplanation', 'isGameOver', 'gameOverReason'],
 };
 
-// Generates system instructions based on duel settings and history
 const generateSystemInstruction = (history: HistoryItem[], settings: DuelSettings): string => {
     const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
     const historyText = duelHistory.map(turn => `${turn.player === PlayerType.USER ? 'Jucător' : 'AI'}: ${turn.text}`).join('\n') || 'Niciun istoric încă.';
@@ -127,7 +126,6 @@ const generateSystemInstruction = (history: HistoryItem[], settings: DuelSetting
         "Nivel 5 (Expert): Utilizează concepte de nișă, limbaj academic și metafore complexe. Critica trebuie să fie la nivel înalt, provocând jucătorul la maximum."
     ];
 
-    // Player feedback analysis
     const tooComplicatedCount = duelHistory.filter(m => m.isMarkedTooComplex).length;
     const likedResponses = duelHistory.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
 
@@ -169,7 +167,6 @@ ${DUEL_RULES_TEXT}
 `;
 };
 
-// Main function to get AI response during the duel
 export const getAiDuelResponse = async (history: HistoryItem[], playerScore: number, aiScore: number, settings: DuelSettings): Promise<GeminiDuelResponse> => {
     const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
     const lastPlayerMessage = duelHistory.length > 0 ? duelHistory[duelHistory.length - 1].text : "Eu sunt...";
@@ -183,89 +180,71 @@ export const getAiDuelResponse = async (history: HistoryItem[], playerScore: num
 
     const systemInstruction = generateSystemInstruction(history, settings);
     const userPrompt = `Jucătorul a spus: "${lastPlayerMessage}". Analizează, răspunde și evaluează conform regulilor și contextului.`;
+    
+    const payload = {
+        model, contents: userPrompt,
+        config: { systemInstruction, responseMimeType: "application/json", responseSchema, temperature: 0.8 }
+    };
 
     try {
-        const client = getAiClient();
-        const response = await client.models.generateContent({
-            model: model, contents: userPrompt,
-            config: { systemInstruction, responseMimeType: "application/json", responseSchema, temperature: 0.8 }
-        });
-
-        if (!response || !response.text) {
-             throw new Error("API response is empty or invalid.");
-        }
+        const response: GenerateContentResponse = await fetchFromProxy('generateContent', payload);
+        if (!response || !response.text) throw new Error("Proxy response is empty or invalid.");
         const parsedResponse: GeminiDuelResponse = JSON.parse(response.text);
         return parsedResponse;
     } catch (error) {
-        console.error("Error calling Gemini API for duel response:", error);
+        console.error("Error calling proxy for duel response:", error);
         const errorMessage = error instanceof Error ? error.message : "Could not parse API response";
         return {
-            aiResponseText: "Am o pană de idei...", playerScore: 0, playerScoreExplanation: `Eroare: ${errorMessage}`, playerImprovedExamples: [], aiScore: 0, aiScoreExplanation: "Eroare internă.", isGameOver: false, gameOverReason: "",
+            aiResponseText: "Am o pană de idei...", playerScore: 0, playerScoreExplanation: `Eroare internă.`, playerImprovedExamples: [], aiScore: 0, aiScoreExplanation: `AI-ul nu poate răspunde. Motiv: ${errorMessage}`, isGameOver: false, gameOverReason: "",
         };
     }
 };
 
-// New function to get a detailed explanation for an AI response
 export const getExplanationForResponse = async (textToExplain: string, difficulty: number): Promise<string> => {
-    const ageGroup = Math.max(10, difficulty * 3 + 5); // Simple mapping of difficulty to assumed age for explanation
+    const ageGroup = Math.max(10, difficulty * 3 + 5);
     const prompt = `Explică următoarea afirmație ca și cum ai vorbi cu cineva de ${ageGroup} ani. Folosește un limbaj clar și simplu. Oferă cel puțin 10 idei, exemple sau pași pentru a înțelege conceptul din spatele ei. Fii încurajator și educativ. Afirmația: "${textToExplain}"`;
+    
+    const payload = { model, contents: prompt, config: { temperature: 0.7 } };
+
     try {
-        const client = getAiClient();
-        const response = await client.models.generateContent({ model, contents: prompt, config: { temperature: 0.7 } });
-        if (!response || !response.text) {
-            return "Nu am putut genera o explicație în acest moment. Te rog încearcă din nou.";
-        }
+        const response: GenerateContentResponse = await fetchFromProxy('generateContent', payload);
+        if (!response || !response.text) return "Nu am putut genera o explicație în acest moment.";
         return response.text;
     } catch (error) {
-        console.error("Error getting explanation:", error);
+        console.error("Error getting explanation via proxy:", error);
         const errorMessage = error instanceof Error ? error.message : "Eroare necunoscută";
         return `Nu am putut genera o explicație. Motiv: ${errorMessage}.`;
     }
 };
 
-// New function for post-game analysis and recommendations
 export const getPostGameAnalysis = async (history: HistoryItem[], settings: DuelSettings): Promise<string> => {
     const duelHistory = history.filter(item => 'player' in item) as DuelMessage[];
     const likedResponses = duelHistory.filter(m => m.isLiked && m.player === PlayerType.AI).map(m => m.text);
-    
-    const historyText = duelHistory.map(m => {
-        let entry = `${m.player}: ${m.text} (Scor: ${m.score || 'N/A'})`;
-        if (m.isLiked) entry += " [APRECIAT]";
-        if (m.isMarkedTooComplex) entry += " [PREA COMPLICAT]";
-        return entry;
-    }).join('\n');
-
-    const favoriteThemesText = settings.favoriteThemes && settings.favoriteThemes.length > 0
-        ? settings.favoriteThemes.join(', ')
-        : 'Niciunul';
+    const historyText = duelHistory.map(m => `${m.player}: ${m.text} (Scor: ${m.score || 'N/A'})`).join('\n');
+    const favoriteThemesText = settings.favoriteThemes && settings.favoriteThemes.length > 0 ? settings.favoriteThemes.join(', ') : 'Niciunul';
 
     const prompt = `Un jucător tocmai a terminat un "Duel al Ideilor".
 - Nivelul de dificultate a fost: ${settings.difficulty}/5.
 - Nivelul metaforic setat a fost: ${settings.metaphoricalLevel} (pe o scară de la 0 la 20).
 - Temele favorite selectate au fost: ${favoriteThemesText}.
 - Subiectele evitate au fost: ${settings.excludedTopics.join(', ') || 'Niciunul'}.
-- Istoricul duelului este:
-${historyText}
-
+- Istoricul duelului este:\n${historyText}
 Analizează performanța jucătorului și oferă-i o analiză personalizată și recomandări. Recomandările (cărți, autori, concepte de studiat) trebuie să fie adaptate nivelului de dificultate ales și TEMELOR FAVORITE. Fii încurajator, specific și poetic.
-Pune accent în analiză pe conceptele din spatele răspunsurilor apreciate de jucător, dacă există:
-${likedResponses.join('\n') || 'Niciunul'}`;
+Pune accent în analiză pe conceptele din spatele răspunsurilor apreciate de jucător, dacă există:\n${likedResponses.join('\n') || 'Niciunul'}`;
+
+    const payload = { model, contents: prompt, config: { temperature: 0.8 } };
 
     try {
-        const client = getAiClient();
-        const response = await client.models.generateContent({ model, contents: prompt, config: { temperature: 0.8 } });
-        if (!response || !response.text) {
-             return "Fiecare idee este o sămânță. Continuă să le cultivi și vei construi o grădină a minții de neegalat. Felicitări pentru duel!";
-        }
+        const response: GenerateContentResponse = await fetchFromProxy('generateContent', payload);
+        if (!response || !response.text) return "Fiecare idee este o sămânță. Continuă să le cultivi. Felicitări pentru duel!";
         return response.text;
     } catch (error) {
-        console.error("Error getting post-game analysis:", error);
+        console.error("Error getting post-game analysis via proxy:", error);
         const errorMessage = error instanceof Error ? error.message : "Eroare necunoscută";
         return `Nu am putut genera analiza finală. Motiv: ${errorMessage}.`;
     }
 };
 
-// New function for analyzing a player's challenge
 export const analyzeChallenge = async (
     challenge: { msg1: DuelMessage, msg2: DuelMessage, predefinedReason: string, argument?: string, wager: number },
     history: HistoryItem[],
@@ -274,112 +253,70 @@ export const analyzeChallenge = async (
     const challengeResponseSchema = {
         type: Type.OBJECT,
         properties: {
-            isApproved: { type: Type.BOOLEAN, description: 'Decizia ta: true dacă contestația este aprobată, false altfel.' },
-            reasoning: { type: Type.STRING, description: 'Explicația detaliată și imparțială a deciziei tale în limba română, bazată pe REGULAMENT.' },
-            penalty: { type: Type.INTEGER, description: `Dacă isApproved este true, numărul de puncte (între 1 și ${challenge.wager * 3}) pe care AI-ul adversar îl va pierde. Altfel, 0.` }
+            isApproved: { type: Type.BOOLEAN },
+            reasoning: { type: Type.STRING },
+            penalty: { type: Type.INTEGER }
         },
         required: ['isApproved', 'reasoning', 'penalty']
     };
-
-    const userCreativityHistory = (history.filter(item => 'player' in item && item.player === PlayerType.USER) as DuelMessage[])
-        .map(m => `- "${m.text}" (Scor: ${m.score})`)
-        .join('\n');
-    
-    const challengeType = (challenge.msg1.player === PlayerType.AI && challenge.msg2.player === PlayerType.AI) 
-        ? "REPETIȚIE" 
-        : "ANIHILARE NECONFORMĂ";
+    const userCreativityHistory = (history.filter(item => 'player' in item && item.player === PlayerType.USER) as DuelMessage[]).map(m => `- "${m.text}" (Scor: ${m.score})`).join('\n');
+    const challengeType = (challenge.msg1.player === PlayerType.AI && challenge.msg2.player === PlayerType.AI) ? "REPETIȚIE" : "ANIHILARE NECONFORMĂ";
 
     const systemInstruction = `Ești un AI Judecător, imparțial și analitic. Sarcina ta este să evaluezi o contestație depusă de un jucător în "Duelul Ideilor".
-
 ${DUEL_RULES_TEXT}
-
 **Detalii Contestație:**
-- **Tip Contestație:** ${challengeType}. Jucătorul susține că adversarul AI fie a repetat un răspuns, fie nu a anihilat corect o replică anterioară, conform regulamentului.
-- **Motivul Predefinit (ales de jucător):** ${challenge.predefinedReason}
-- **Miza jucătorului:** ${challenge.wager} puncte.
-- **Mesaj 1:** "${challenge.msg1.text}" (Autor: ${challenge.msg1.player})
-- **Mesaj 2:** "${challenge.msg2.text}" (Autor: ${challenge.msg2.player})
-- **Argumentul suplimentar al jucătorului:** ${challenge.argument || "Niciun argument."}
+- Tip: ${challengeType}.
+- Motiv Predefinit: ${challenge.predefinedReason}
+- Miza: ${challenge.wager} puncte.
+- Mesaj 1: "${challenge.msg1.text}" (Autor: ${challenge.msg1.player})
+- Mesaj 2: "${challenge.msg2.text}" (Autor: ${challenge.msg2.player})
+- Argument Jucător: ${challenge.argument || "Niciunul."}
+**Context Joc:**
+- Dificultate: ${settings.difficulty}/5.
+- Faza Jocului: ${Math.round((history.length / 20) * 100)}%.
+- Istoric Jucător:\n${userCreativityHistory}
+**Reguli Judecată:**
+1. Analizează contestația prioritar prin prisma motivului predefinit.
+2. La dificultate mică (1-2), fii indulgent. La dificultate mare (4-5), fii strict.
+3. Dacă aprobi, penalizarea este între 1 și ${challenge.wager * 3} puncte.
+4. Răspunsul trebuie să fie STRICT JSON, conform schemei.`;
 
-**Contextul Jocului:**
-- Nivel de dificultate: ${settings.difficulty}/5 (1=copil, 5=expert).
-- Faza jocului: ${Math.round((history.length / 20) * 100)}% (procentaj aproximativ).
-- Istoricul răspunsurilor jucătorului:
-${userCreativityHistory}
-
-**Reguli de Judecată (STRICTE):**
-1.  **Analiza Contestației:**
-    - Dacă tipul este **REPETIȚIE**: Evaluează similaritatea semantică, nu doar cea textuală. Două răspunsuri sunt repetitive dacă exprimă fundamental aceeași idee.
-    - Dacă tipul este **ANIHILARE NECONFORMĂ**: Evaluează dacă Mesajul 2 (răspunsul AI) anihilează corect Mesajul 1 (declarația jucătorului) conform Tipurilor de Raporturi (Secțiunea III din regulament). Un răspuns care nu se încadrează în niciun tip de raport valid este o anihilare neconformă. Verifică și dacă răspunsul este invalid conform Secțiunii IV.
-2.  **Ponderarea Factorilor:**
-    - **Dificultate:** La nivel mic (1-2), fii mai indulgent. La nivel mare (4-5), fii mai strict.
-    - **Faza Jocului:** La început (0-30%), fii mai tolerant. La final (70-100%), fii foarte exigent pentru a preveni abuzul.
-    - **Argument:** Un argument bun crește șansele de aprobare.
-3.  **Stabilirea Penalizării:** Dacă aprobi contestația ('isApproved: true'), stabilește o penalizare pentru AI între 1 și ${challenge.wager * 3} puncte. O încălcare flagrantă merită o penalizare maximă. Una subtilă, o penalizare minimă.
-4.  **Format Răspuns:** Răspunsul tău trebuie să fie STRICT în format JSON, conform schemei. Fără text suplimentar.
-5.  **Focalizare pe Motiv:** Analizează contestația **prioritar** prin prisma motivului predefinit selectat de jucător. Argumentul suplimentar este secundar.
-
-Acționează acum ca un judecător și oferă verdictul.`;
+    const payload = {
+        model,
+        contents: "Evaluează contestația conform instrucțiunilor.",
+        config: { systemInstruction, responseMimeType: "application/json", responseSchema: challengeResponseSchema, temperature: 0.5 }
+    };
 
     try {
-        const client = getAiClient();
-        const response = await client.models.generateContent({
-            model: model,
-            contents: "Evaluează contestația conform instrucțiunilor tale de sistem.",
-            config: { 
-                systemInstruction, 
-                responseMimeType: "application/json", 
-                responseSchema: challengeResponseSchema,
-                temperature: 0.5 
-            }
-        });
-
-        if (!response || !response.text) {
-             throw new Error("API response for challenge analysis is empty or invalid.");
-        }
+        const response: GenerateContentResponse = await fetchFromProxy('generateContent', payload);
+        if (!response || !response.text) throw new Error("Proxy response for challenge is empty.");
         const parsedResponse: GeminiChallengeAnalysisResponse = JSON.parse(response.text);
-        // Ensure penalty does not exceed the allowed maximum
         parsedResponse.penalty = Math.min(parsedResponse.penalty, challenge.wager * 3);
         return parsedResponse;
     } catch (error) {
-        console.error("Error calling Gemini API for challenge analysis:", error);
+        console.error("Error calling proxy for challenge analysis:", error);
         const reasoning = `A apărut o eroare în timpul deliberării. Contestația a fost respinsă automat. Motiv: ${error instanceof Error ? error.message : "Eroare necunoscută"}`;
-        return { isApproved: false, reasoning: reasoning, penalty: 0 };
+        return { isApproved: false, reasoning, penalty: 0 };
     }
 };
 
-/**
- * Generates an image based on a text prompt using the Imagen model.
- * The prompt should be contextual, describing the interaction between two ideas.
- * @param prompt The text to visualize.
- * @returns A promise that resolves to a base64 encoded image string.
- */
 export const generateImageForPrompt = async (prompt: string): Promise<string> => {
-    // Enhance the prompt for better artistic results, tailored for conceptual illustration.
     const artisticPrompt = `A symbolic and conceptual digital painting, cinematic lighting, dramatic, high detail, masterpiece, illustrating: ${prompt}`;
+    
+    const payload = {
+        model: imageModel,
+        prompt: artisticPrompt,
+        config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio: '1:1' }
+    };
 
     try {
-        const client = getAiClient();
-        const response = await client.models.generateImages({
-            model: imageModel,
-            prompt: artisticPrompt,
-            config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: '1:1', // Square images fit well in modals
-            },
-        });
-
+        const response: GenerateImageResponse = await fetchFromProxy('generateImages', payload);
         if (!response.generatedImages || response.generatedImages.length === 0) {
-            throw new Error("API did not return any images.");
+            throw new Error("Proxy did not return any images.");
         }
-
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
-        return base64ImageBytes;
-
+        return response.generatedImages[0].image.imageBytes;
     } catch (error) {
-        console.error("Error calling Gemini API for image generation:", error);
-        // Re-throw the error so the UI component can handle it (e.g., close the loading modal)
+        console.error("Error calling proxy for image generation:", error);
         throw error;
     }
 };
