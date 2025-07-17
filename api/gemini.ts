@@ -1,5 +1,4 @@
-
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, GenerateContentResponse, GenerateImagesResponse } from '@google/genai';
 
 // Acest cod rulează pe server, NU în browser.
 // process.env.API_KEY este citit în siguranță de pe serverul Vercel.
@@ -30,24 +29,36 @@ export default async function handler(req: any, res: any) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    let result;
+    let responseData;
     
     // Decidem ce funcție a API-ului Google să apelăm pe baza 'path'-ului
     switch (path) {
       case 'generateContent':
-        result = await ai.models.generateContent(payload);
+        const contentResult: GenerateContentResponse = await ai.models.generateContent(payload);
+        // Motivul acestei conversii:
+        // Răspunsul de la SDK (contentResult) este o clasă cu accesorii (getters) precum `.text`.
+        // Când se face JSON.stringify pe o clasă, doar proprietățile de date sunt serializate, nu și valorile returnate de getteri.
+        // Pentru a ne asigura că clientul primește valoarea din `.text`, o extragem aici, pe server,
+        // și o punem într-un obiect simplu, care poate fi serializat corect.
+        responseData = {
+          text: contentResult.text,
+          candidates: contentResult.candidates,
+        };
         break;
       case 'generateImages':
-        result = await ai.models.generateImages(payload);
+        const imageResult: GenerateImagesResponse = await ai.models.generateImages(payload);
+        // Similar cu generateContent, ne asigurăm că trimitem un obiect simplu.
+        responseData = {
+          generatedImages: imageResult.generatedImages,
+        };
         break;
-      // Poți adăuga aici și alte funcționalități, cum ar fi chat-ul
       default:
         res.status(400).json({ error: `Invalid path: ${path}` });
         return;
     }
     
-    // Trimitem răspunsul de succes înapoi la client
-    res.status(200).json(result);
+    // Trimitem răspunsul de succes (ca obiect simplu) înapoi la client
+    res.status(200).json(responseData);
 
   } catch (error) {
     console.error(`Error calling Gemini API via proxy for path: ${path}`, error);

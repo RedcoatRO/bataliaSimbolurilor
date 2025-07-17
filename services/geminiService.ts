@@ -1,5 +1,4 @@
-
-import { GenerateContentResponse, GenerateImageResponse, Type } from "@google/genai";
+import { GenerateContentResponse, GenerateImagesResponse, Type } from "@google/genai";
 import type { DuelMessage, GeminiDuelResponse, DuelSettings, HistoryItem, GeminiChallengeAnalysisResponse, ChallengeResult } from '../types';
 import { PlayerType } from '../types';
 
@@ -310,7 +309,7 @@ export const generateImageForPrompt = async (prompt: string): Promise<string> =>
     };
 
     try {
-        const response: GenerateImageResponse = await fetchFromProxy('generateImages', payload);
+        const response: GenerateImagesResponse = await fetchFromProxy('generateImages', payload);
         if (!response.generatedImages || response.generatedImages.length === 0) {
             throw new Error("Proxy did not return any images.");
         }
