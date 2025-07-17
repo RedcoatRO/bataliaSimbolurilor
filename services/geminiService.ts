@@ -7,6 +7,7 @@ const imageModel = 'imagen-3.0-generate-002';
 
 /**
  * A generic and secure fetcher function to communicate with our serverless proxy.
+ * This version prioritizes detailed error messages from the proxy for better debugging.
  * @param path The API endpoint to call (e.g., 'generateContent', 'generateImages').
  * @param payload The data to send to the Gemini API.
  * @returns The response from the Gemini API.
@@ -21,16 +22,22 @@ const fetchFromProxy = async (path: 'generateContent' | 'generateImages', payloa
             body: JSON.stringify({ path, payload }),
         });
 
+        // If the response is not OK, parse the JSON to get the detailed error.
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
-            throw new Error(`API Proxy Error: ${response.statusText} - ${errorData.error || 'No details'}`);
+            const errorData = await response.json().catch(() => ({ 
+                error: 'Eroare la parsarea răspunsului de eroare de la server.' 
+            }));
+            // Prioritize the 'details' field, which contains the specific error message from the Google API,
+            // otherwise, fall back to the generic 'error' field.
+            throw new Error(errorData.details || errorData.error || 'A apărut o eroare necunoscută la proxy.');
         }
 
         return await response.json();
 
     } catch (error) {
         console.error(`Failed to fetch from proxy for path ${path}:`, error);
-        throw error; // Re-throw the error to be handled by the calling function
+        // Re-throw the error (now with a detailed message if available) to be handled by the calling function.
+        throw error;
     }
 };
 
