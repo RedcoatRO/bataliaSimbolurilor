@@ -47,13 +47,19 @@ export default async function handler(req: any, res: any) {
         break;
       case 'generateImages':
         const imageResult: GenerateImagesResponse = await ai.models.generateImages(payload);
-        // Similar cu generateContent, ne asigurăm că trimitem un obiect simplu (Plain Old JavaScript Object)
-        // pentru a evita problemele de serializare unde getteri sau alte proprietăți ale clasei se pierd.
-        // Reconstruim manual obiectul cu datele de care clientul are nevoie.
+        
+        // Robustness check: Handle cases where the API returns no images
+        // (e.g., due to safety filters). If `imageResult.generatedImages` is undefined or empty,
+        // we create an empty array to prevent the server from crashing.
+        const imagesToProcess = imageResult.generatedImages || [];
+
+        // Reconstruct the response object to ensure it's a simple JSON object
+        // that can be safely sent to the client.
         responseData = {
-          generatedImages: imageResult.generatedImages.map(img => ({
+          generatedImages: imagesToProcess.map(img => ({
             image: {
-              imageBytes: img.image.imageBytes,
+              // Ensure we don't try to access properties on a null/undefined object
+              imageBytes: img?.image?.imageBytes,
             },
           })),
         };
